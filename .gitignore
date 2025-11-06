@@ -2,3 +2,8 @@ received_images/
 env.h
 ./received_images/
 .copilot/
+config/
+*.config.py
+../config.py
+config.py
+.env
