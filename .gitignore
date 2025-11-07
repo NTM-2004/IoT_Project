@@ -7,3 +7,7 @@ config/
 ../config.py
 config.py
 .env
+./../archive/
+# Ignore archive folders that store processed images
+archive/
+**/archive/

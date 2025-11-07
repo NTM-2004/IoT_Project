@@ -1,10 +1,10 @@
 """
 Main application - FastAPI Server
 """
-from fastapi import FastAPI, WebSocket, Depends, Request
+from fastapi import FastAPI, WebSocket, Depends, Request, File, UploadFile
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy.orm import Session
 from datetime import datetime
 import os
@@ -272,6 +272,131 @@ async def websocket_endpoint(websocket: WebSocket):
     finally:
         websocket_clients.remove(websocket)
         print(f"[WS] Client disconnected (total: {len(websocket_clients)})")
+
+@app.post("/api/upload-image")
+async def upload_image(file: UploadFile = File(...)):
+    """
+    API nhận ảnh từ ESP32-CAM
+    ESP32 gửi POST request với multipart/form-data
+    """
+    print(f"[API] Received image upload: {file.filename} ({file.content_type})")
+    
+    try:
+        # Đọc nội dung ảnh
+        image_bytes = await file.read()
+        print(f"[API] Image size: {len(image_bytes)} bytes")
+        
+        # Kiểm tra kích thước hợp lệ
+        if len(image_bytes) < 1000:  # Ảnh quá nhỏ
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "success": False,
+                    "error": "Image too small",
+                    "message": "Ảnh quá nhỏ, có thể bị lỗi"
+                }
+            )
+        
+        # Bước 1: Lưu ảnh vào TEMP
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        temp_path = os.path.join(settings.TEMP_DIR, f"temp_{timestamp}.jpg")
+        
+        with open(temp_path, 'wb') as f:
+            f.write(image_bytes)
+        print(f"[API] ✓ Temp image saved: {temp_path}")
+        
+        # Bước 2: Gọi OCR API
+        result = ocr_service.recognize_plate(image_bytes)
+        
+        if result:
+            plate = result.get('plate', 'UNKNOWN')
+            confidence = result.get('confidence', 0)
+            
+            print(f"[API] ✓ OCR Result: {plate} (confidence: {confidence})")
+            
+            # Bước 3: Lưu vào ARCHIVE nếu đạt ngưỡng
+            if plate != 'UNKNOWN' and confidence > 0.5:
+                archive_path = os.path.join(settings.ARCHIVE_DIR, f"{plate}_{timestamp}.jpg")
+                
+                import shutil
+                shutil.copy2(temp_path, archive_path)
+                print(f"[API] ✓ Image archived: {archive_path}")
+                
+                # Xóa temp
+                try:
+                    os.remove(temp_path)
+                except:
+                    pass
+                
+                final_path = archive_path
+            else:
+                print(f"[API] ⚠ Low confidence, keeping in temp")
+                final_path = temp_path
+            
+            # Bước 4: Lưu database
+            db = next(get_db())
+            try:
+                log = VehicleLog(
+                    license_plate=plate,
+                    image_path=final_path,
+                    ocr_result=json.dumps(result),
+                    confidence=str(confidence),
+                    action="entry"
+                )
+                db.add(log)
+                db.commit()
+                print(f"[API] ✓ Saved to database")
+            finally:
+                db.close()
+            
+            # Bước 5: Broadcast WebSocket
+            await broadcast_to_websockets({
+                'type': 'new_vehicle',
+                'plate': plate,
+                'confidence': confidence,
+                'timestamp': datetime.now().isoformat()
+            })
+            
+            # Trả response cho ESP32
+            return JSONResponse(
+                status_code=200,
+                content={
+                    "success": True,
+                    "plate": plate,
+                    "confidence": confidence,
+                    "message": f"Biển số: {plate}",
+                    "action": "open_gate"  # Signal cho ESP32 mở cổng
+                }
+            )
+        else:
+            print(f"[API] ✗ OCR failed")
+            
+            # Xóa temp nếu OCR fail
+            try:
+                os.remove(temp_path)
+            except:
+                pass
+            
+            return JSONResponse(
+                status_code=200,
+                content={
+                    "success": False,
+                    "error": "OCR_FAILED",
+                    "message": "Không đọc được biển số",
+                    "action": "none"
+                }
+            )
+    
+    except Exception as e:
+        print(f"[API] ✗ Error: {str(e)}")
+        return JSONResponse(
+            status_code=500,
+            content={
+                "success": False,
+                "error": str(e),
+                "message": "Lỗi xử lý ảnh"
+            }
+        )
 
 if __name__ == "__main__":
     import uvicorn

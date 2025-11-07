@@ -49,3 +49,5 @@ received_images/
 # OS
 .DS_Store
 Thumbs.db
+
+./archive/
