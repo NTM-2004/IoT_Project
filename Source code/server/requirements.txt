@@ -13,8 +13,10 @@ pyserial==3.5
 httpx==0.25.1
 requests==2.31.0
 
-# Database (SQLite)
-sqlalchemy==2.0.23
+# Database (MySQL)
+sqlalchemy==2.0.36
+pymysql==1.1.1
+cryptography==43.0.3
 
 # Template engine
 jinja2==3.1.2

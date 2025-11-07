@@ -54,8 +54,18 @@
         
         .slots-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+            grid-template-columns: repeat(4, 1fr);
             gap: 15px;
+            max-width: 600px;
+        }
+        
+        .slot-row-label {
+            grid-column: 1 / -1;
+            font-weight: bold;
+            color: #667eea;
+            margin-top: 10px;
+            margin-bottom: 5px;
+            font-size: 1.1em;
         }
         
         .slot {
@@ -185,15 +195,15 @@
         
         <div class="stats">
             <div class="stat-card">
-                <div class="stat-value" id="total-slots">{{ slots|length }}</div>
+                <div class="stat-value" id="total-slots">8</div>
                 <div class="stat-label">Tổng số chỗ</div>
             </div>
             <div class="stat-card">
-                <div class="stat-value" id="occupied-slots">{{ slots|selectattr('is_occupied')|list|length }}</div>
+                <div class="stat-value" id="occupied-slots">0</div>
                 <div class="stat-label">Đang sử dụng</div>
             </div>
             <div class="stat-card">
-                <div class="stat-value" id="free-slots">{{ slots|rejectattr('is_occupied')|list|length }}</div>
+                <div class="stat-value" id="free-slots">8</div>
                 <div class="stat-label">Còn trống</div>
             </div>
         </div>
@@ -205,13 +215,26 @@
                     Trạng thái bãi đỗ
                 </h2>
                 <div class="slots-grid" id="slots-grid">
-                    {% for slot in slots %}
-                    <div class="slot {% if slot.is_occupied %}occupied{% else %}free{% endif %}" 
-                         data-slot="{{ slot.slot_number }}">
-                        {{ slot.slot_number }}
-                    </div>
-                    {% else %}
-                    <p style="color: #6b7280;">Chưa có dữ liệu slot...</p>
+                    <!-- Row A -->
+                    <div class="slot-row-label">Hàng A:</div>
+                    {% set slot_names_a = ['A1', 'A2', 'A3', 'A4'] %}
+                    {% for slot_name in slot_names_a %}
+                        {% set slot_data = slots|selectattr('slot_number', 'equalto', slot_name)|first %}
+                        <div class="slot {% if slot_data and slot_data.is_occupied %}occupied{% else %}free{% endif %}" 
+                             data-slot="{{ slot_name }}">
+                            {{ slot_name }}
+                        </div>
+                    {% endfor %}
+                    
+                    <!-- Row B -->
+                    <div class="slot-row-label">Hàng B:</div>
+                    {% set slot_names_b = ['B1', 'B2', 'B3', 'B4'] %}
+                    {% for slot_name in slot_names_b %}
+                        {% set slot_data = slots|selectattr('slot_number', 'equalto', slot_name)|first %}
+                        <div class="slot {% if slot_data and slot_data.is_occupied %}occupied{% else %}free{% endif %}" 
+                             data-slot="{{ slot_name }}">
+                            {{ slot_name }}
+                        </div>
                     {% endfor %}
                 </div>
             </div>
@@ -309,7 +332,7 @@
         
         function updateStats() {
             const slots = document.querySelectorAll('.slot');
-            const total = slots.length;
+            const total = 8; // Fixed 8 slots
             const occupied = document.querySelectorAll('.slot.occupied').length;
             const free = total - occupied;
             
