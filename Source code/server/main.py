@@ -32,6 +32,7 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # WebSocket clients cho realtime update
 websocket_clients = []
+pending_broadcasts = []  # Queue cho messages cần broadcast
 
 # MQTT Handler
 mqtt_handler = None
@@ -94,6 +95,10 @@ async def startup_event():
     except Exception as e:
         print(f"✗ Database error: {e}")
         print("  Make sure MySQL is running and credentials are correct")
+    
+    # Khởi động background task để broadcast WebSocket messages
+    asyncio.create_task(websocket_broadcast_worker())
+    print("✓ WebSocket broadcast worker started")
     
     # Khởi tạo MQTT Handler để nhận trạng thái slot
     print(f"[MQTT] Attempting to connect to: {settings.MQTT_BROKER}:{settings.MQTT_PORT}")
@@ -186,13 +191,15 @@ def handle_slot_update(data):
             db.commit()
             print(f"[DATABASE] ✓ Slot {slot_number} -> {'OCCUPIED' if is_occupied else 'FREE'}")
             
-            # Broadcast đến WebSocket clients
-            asyncio.create_task(broadcast_to_websockets({
+            # Thêm vào queue để broadcast (vì đây là sync function)
+            message = {
                 'type': 'slot_update',
                 'slot': slot_number,
                 'occupied': is_occupied,
                 'timestamp': datetime.utcnow().isoformat()
-            }))
+            }
+            pending_broadcasts.append(message)
+            print(f"[WEBSOCKET] Queued broadcast for slot {slot_number}")
         
         finally:
             db.close()
@@ -212,6 +219,22 @@ async def broadcast_to_websockets(message):
     # Remove disconnected clients
     for client in disconnected:
         websocket_clients.remove(client)
+
+async def websocket_broadcast_worker():
+    """Background task để xử lý queue broadcast"""
+    while True:
+        try:
+            if pending_broadcasts:
+                # Lấy message từ queue
+                message = pending_broadcasts.pop(0)
+                await broadcast_to_websockets(message)
+                print(f"[WEBSOCKET] Broadcasted: {message.get('type')}")
+            
+            # Chờ 0.1s trước khi check lại
+            await asyncio.sleep(0.1)
+        except Exception as e:
+            print(f"[WEBSOCKET] Broadcast worker error: {e}")
+            await asyncio.sleep(1)
 
 # ==================== Routes ====================
 
