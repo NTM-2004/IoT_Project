@@ -1,6 +1,3 @@
-"""
-Service gọi OCR API để nhận dạng biển số xe
-"""
 import requests
 from config import settings
 
@@ -8,18 +5,10 @@ class OCRService:
     def __init__(self):
         self.api_url = settings.OCR_API_URL
         self.api_key = settings.OCR_API_KEY
-        self.regions = ["vn"]  # Vietnam - có thể thêm regions khác: ["vn", "us-ca", "mx"]
+        self.regions = ["vn"]  
     
     def recognize_plate(self, image_bytes):
-        """
-        Gọi API OCR để nhận dạng biển số (Synchronous)
-        
-        Args:
-            image_bytes: Dữ liệu ảnh dạng bytes
-        
-        Returns:
-            dict: Kết quả OCR hoặc None nếu lỗi
-        """
+
         try:
             files = {'upload': ('image.jpg', image_bytes, 'image/jpeg')}
             headers = {'Authorization': f'{self.api_key}'}
@@ -49,7 +38,6 @@ class OCRService:
             return None
     
     def _parse_result(self, result):
-        """Parse kết quả từ API"""
         try:
             if 'results' in result and len(result['results']) > 0:
                 plate_data = result['results'][0]

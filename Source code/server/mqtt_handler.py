@@ -1,6 +1,3 @@
-"""
-Xử lý MQTT để nhận trạng thái slot đỗ xe
-"""
 import paho.mqtt.client as mqtt
 import json
 from config import settings
@@ -21,7 +18,6 @@ class MQTTHandler:
             self.client.username_pw_set(settings.MQTT_USERNAME, settings.MQTT_PASSWORD)
     
     def _on_connect(self, client, userdata, flags, rc):
-        """Callback khi kết nối MQTT"""
         if rc == 0:
             print(f"✓ Connected to MQTT broker: {settings.MQTT_BROKER}")
             # Subscribe vào topic slots
@@ -31,7 +27,6 @@ class MQTTHandler:
             print(f"✗ Failed to connect to MQTT broker, code: {rc}")
     
     def _on_message(self, client, userdata, msg):
-        """Callback khi nhận message"""
         try:
             topic = msg.topic
             payload = msg.payload.decode()

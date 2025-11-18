@@ -1,7 +1,4 @@
-"""
-IoT Parking System - Main Application
-Refactored version với module structure
-"""
+
 from fastapi import FastAPI, WebSocket
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
@@ -113,7 +110,6 @@ async def startup_event():
     else:
         print("⚠ MQTT Handler failed")
         
-        # Chỉ thử khởi động Mosquitto nếu broker là localhost
         if is_local_broker:
             print("[MQTT] Broker is localhost, trying to start Mosquitto...")
             

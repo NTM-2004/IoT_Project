@@ -31,7 +31,6 @@ class VehicleLog(Base):
     action = Column(String(10))  # "entry" hoặc "exit"
 
 # Tạo engine và session
-# Bỏ check_same_thread vì MySQL không cần (chỉ SQLite mới cần)
 engine = create_engine(
     settings.DATABASE_URL,
     pool_pre_ping=True,  # Kiểm tra connection trước khi dùng
