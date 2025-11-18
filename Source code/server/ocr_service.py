@@ -22,7 +22,7 @@ class OCRService:
         """
         try:
             files = {'upload': ('image.jpg', image_bytes, 'image/jpeg')}
-            headers = {'Authorization': f'Token {self.api_key}'}
+            headers = {'Authorization': f'{self.api_key}'}
             data = {'regions': self.regions}  # Optional: specify regions
             
             print(f"[OCR] Sending request to {self.api_url}...")
@@ -36,7 +36,7 @@ class OCRService:
                 timeout=30
             )
             
-            if response.status_code == 200:
+            if response.status_code == 200 or response.status_code == 201:
                 result = response.json()
                 print(f"[OCR] ✓ Success: {result}")
                 return self._parse_result(result)

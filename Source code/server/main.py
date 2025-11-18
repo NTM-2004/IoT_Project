@@ -445,6 +445,19 @@ async def upload_image(file: UploadFile = File(...), db: Session = Depends(get_d
                 'timestamp': datetime.now().isoformat()
             })
             
+            # Điều khiển GATE qua MQTT
+            gate_action = "open" if confidence > 0.5 else "reject"
+            gate_message = {
+                "action": gate_action,
+                "plate": plate,
+                "confidence": confidence
+            }
+            
+            if mqtt_handler and mqtt_handler.publish("iot/parking/gate/control", gate_message):
+                print(f"[GATE] ✅ Command sent: {gate_action.upper()}")
+            else:
+                print(f"[GATE] ⚠ Failed to send command")
+            
             print(f"{'='*50}\n")
             
             # Trả response cho ESP32
