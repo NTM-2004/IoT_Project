@@ -94,5 +94,5 @@ class GateService:
                 "confidence": confidence
             }
 
-# Singleton instance 
-gate_service = None
+# Singleton instance
+gate_service = GateService()

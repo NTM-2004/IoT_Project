@@ -12,6 +12,7 @@ from models import init_db
 from services.websocket_service import websocket_service
 from services.mosquitto_service import mosquitto_service
 from services.slot_update_service import SlotUpdateService, slot_update_service as _slot_service
+from services.gate_service import gate_service
 
 # Import routes
 from routes import dashboard, slots, vehicles, upload
@@ -92,6 +93,10 @@ async def startup_event():
                 print("[MQTT] ERRO Could not start Mosquitto")
         else:
             print("[MQTT] CRITICAL ERROR Continuing without MQTT...")
+    
+    # Cấu hình Gate Service với MQTT handler
+    gate_service.mqtt_handler = mqtt_handler
+    print("[GATE] SUCCESS Gate service configured")
     
     print("=" * 50)
     print(f"Server running at http://{settings.SERVER_HOST}:{settings.SERVER_PORT}")

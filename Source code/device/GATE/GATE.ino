@@ -40,6 +40,10 @@ unsigned long ocrWaitStartTime = 0;
 const unsigned long OCR_TIMEOUT = 10000;  // 10 giây timeout cho OCR
 String currentDirection = "";  // "in" hoặc "out"
 
+// Manual Gate Queue
+volatile bool manualGateRequested = false;
+SemaphoreHandle_t gateMutex;
+
 // Debounce
 unsigned long lastIRInTime = 0;
 unsigned long lastIROutTime = 0;
@@ -84,6 +88,46 @@ void setRGB_Blink(uint8_t r, uint8_t g, uint8_t b, int times = 3) {
   }
 }
 
+// Fail-safe Gate Handler
+void manualGateTask(void* parameter) {
+  for (;;) {
+    // Chờ lệnh manual 
+    if (manualGateRequested) {
+      // Lock mutex
+      if (xSemaphoreTake(gateMutex, portMAX_DELAY)) {
+        Serial.println("\n[TASK] Processing manual gate request");
+        
+        manualGateRequested = false;  // Reset flag
+        
+        // Tím = Manual Override
+        setRGB_Purple();
+        
+        // Reset waiting state nếu đang chờ OCR
+        if (waitingForOCR) {
+          Serial.println("[SYSTEM] Cancelling pending OCR operation");
+          waitingForOCR = false;
+        }
+        
+        // Mở cổng ngay lập tức
+        openGate();
+        
+        // Gửi log về server
+        String message = "{\"source\":\"manual\",\"direction\":\"manual\",\"override\":true}";
+        if (mqtt.connected()) {
+          mqtt.publish(TOPIC_GATE_STATUS, message.c_str());
+          Serial.println("[MQTT] Manual override logged to server");
+        }
+        
+        // Release mutex
+        xSemaphoreGive(gateMutex);
+      }
+    }
+    
+    // Small delay để không hog CPU
+    vTaskDelay(pdMS_TO_TICKS(50));
+  }
+}
+
 // Setup
 void setup() {
   Serial.begin(115200);
@@ -104,7 +148,15 @@ void setup() {
   // Khởi tạo Servo
   gateServo.attach(SERVO_PIN);
   closeGate();
-  Serial.println("[SERVO] SUCCESS Servo initialized");
+  Serial.println("[SERVO] SUCCESS Servo initialized - Gate CLOSED");
+  
+  // Tạo mutex
+  gateMutex = xSemaphoreCreateMutex();
+  if (gateMutex == NULL) {
+    Serial.println("[SYSTEM] ERROR Failed to create mutex!");
+  } else {
+    Serial.println("[SYSTEM] SUCCESS Mutex created");
+  }
   
   // Kết nối WiFi
   connectWiFi();
@@ -116,7 +168,18 @@ void setup() {
   // Kết nối MQTT
   connectMQTT();
   
-  // WS2812 RGB LED: Xanh lá = System Ready
+  // Tạo FreeRTOS Task cho manual gate handler
+  xTaskCreate(
+    manualGateTask,      // Function
+    "ManualGateTask",    // Name
+    4096,                // Stack size (bytes)
+    NULL,                // Parameter
+    1,                   // Priority 
+    NULL                 // Task handle
+  );
+  Serial.println("[SYSTEM] SUCCESS Manual gate task created");
+  
+  // Xanh lá = System Ready
   setRGB_Blink(0, 255, 0, 5);  // Blink 5 lần
   setRGB_Green();  // Sáng xanh lá cố định
   
@@ -125,7 +188,6 @@ void setup() {
   Serial.println("=================================\n");
 }
 
-// Main Loop
 void loop() {
   // Duy trì kết nối MQTT
   if (!mqtt.connected()) {
@@ -279,7 +341,7 @@ void handleVehicleDetected(String direction) {
     Serial.println("[MQTT] Trigger sent to CAM");
     Serial.print("  Topic: ");
     Serial.println(topic);
-    Serial.println("  Waiting for OCR result...");
+    Serial.println("[SYSTEM] Waiting for OCR result");
     
     // Gửi trạng thái
     publishGateStatus("waiting_ocr");
@@ -295,6 +357,13 @@ void handleGateCommand(String message) {
   Serial.println(message);
   Serial.print("  waitingForOCR state: ");
   Serial.println(waitingForOCR ? "TRUE" : "FALSE");
+  
+  // Kiểm tra lệnh manual từ MONITOR
+  if (message.indexOf("\"manual\"") > 0 && message.indexOf("\"source\":\"manual\"") > 0) {
+    Serial.println("[MQTT] Manual override command received");
+    manualGateRequested = true;  // Set flag cho task xử lý
+    return;
+  }
   
   if (message.indexOf("\"open\"") > 0) {
     Serial.println("[SYSTEM] Opening gate");
@@ -317,31 +386,9 @@ void handleGateCommand(String message) {
 }
 
 void handleManualOpen() {
-  Serial.println("\n╔════════════════════════════════════╗");
-  Serial.println("║  MANUAL OVERRIDE - FAIL-SAFE MODE  ║");
-  Serial.println("╚════════════════════════════════════╝");
-  Serial.println("Button pressed - Opening gate immediately");
-  Serial.println("This action BYPASSES all OCR checks");
-  
-  // RGB LED: Tím = Manual Override
-  setRGB_Purple();
-  Serial.println("  RGB LED: PURPLE (Manual Override)");
-  
-  // Reset waiting state (nếu đang chờ OCR)
-  if (waitingForOCR) {
-    Serial.println("⚠️  Cancelling pending OCR operation");
-    waitingForOCR = false;
-  }
-  
-  // Mở cổng ngay lập tức
-  openGate();
-  
-  // Gửi log về server
-  String message = "{\"source\":\"manual\",\"direction\":\"manual\",\"override\":true}";
-  if (mqtt.connected()) {
-    mqtt.publish(TOPIC_GATE_STATUS, message.c_str());
-    Serial.println("✓ Manual override logged to server");
-  }
+  // Chỉ set flag, task sẽ xử lý
+  manualGateRequested = true;
+  Serial.println("[SYSTEM] Manual gate request queued");
 }
 
 void openGate() {

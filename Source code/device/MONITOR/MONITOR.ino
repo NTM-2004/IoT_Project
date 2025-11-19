@@ -8,8 +8,12 @@
 const char* ssid = WIFI_SSID;
 const char* password = WIFI_PASSWORD;
 
-// MQTT Topic            
-const char* mqtt_topic = "iot/parking/slots"; 
+// MQTT Topics            
+const char* mqtt_topic = "iot/parking/slots";
+const char* gate_control_topic = "iot/parking/gate/control";
+
+// Manual Gate Control 
+#define BUTTON_MANUAL_GATE  16
 
 // TFT display
 TFT_eSPI tft = TFT_eSPI();
@@ -18,7 +22,7 @@ TFT_eSPI tft = TFT_eSPI();
 WiFiClient espClient;
 PubSubClient mqtt(espClient);
 
-// PARKING SLOTS
+// Parking Slots
 #define SLOT_COUNT 8
 #define SLOT_WIDTH 75
 #define SLOT_HEIGHT 45
@@ -34,7 +38,7 @@ struct Slot {
 
 Slot slots[SLOT_COUNT];
 
-// COLORS
+// Colors
 #define COLOR_BG       0x0000      // Black
 #define COLOR_HEADER   0x001F      // Blue
 #define COLOR_EMPTY    0x07E0      // Green
@@ -42,11 +46,15 @@ Slot slots[SLOT_COUNT];
 #define COLOR_TEXT     0xFFFF      // White
 #define COLOR_BORDER   0x7BEF      // Light Gray
 
-// STATUS
+// Status
 bool wifiConnected = false;
 bool mqttConnected = false;
 unsigned long lastReconnectAttempt = 0;
 const unsigned long reconnectInterval = 5000;
+
+// Button
+unsigned long lastButtonPress = 0;
+const unsigned long buttonDebounce = 1000;  // 1 giây debounce
 
 void setup() {
   Serial.begin(115200);
@@ -61,6 +69,10 @@ void setup() {
   
   // Hiển thị splash screen
   drawHeader("Parking Monitor", "Initializing...");
+  
+  // Cấu hình button
+  pinMode(BUTTON_MANUAL_GATE, INPUT_PULLUP);
+  Serial.println("[SYSTEM] Button GPIO 16 configured (PULLUP)");
   
   // Khởi tạo slots
   initSlots();
@@ -100,6 +112,15 @@ void loop() {
   if (WiFi.status() != WL_CONNECTED) {
     wifiConnected = false;
     connectWiFi();
+  }
+  
+  // Kiểm tra button manual gate (active LOW)
+  if (digitalRead(BUTTON_MANUAL_GATE) == LOW) {
+    unsigned long currentTime = millis();
+    if (currentTime - lastButtonPress > buttonDebounce) {
+      lastButtonPress = currentTime;
+      handleManualGateOpen();
+    }
   }
 }
 
@@ -313,4 +334,27 @@ void drawSlot(int index) {
   
   tft.setCursor(xText, yText);
   tft.print(statusText);
+}
+
+void handleManualGateOpen() {
+  Serial.println("\n[BUTTON] Manual gate open button pressed");
+  
+  if (mqtt.connected()) {
+    String message = "{\"action\":\"open\",\"source\":\"manual\",\"direction\":\"manual\"}";
+    
+    if (mqtt.publish(gate_control_topic, message.c_str())) {
+      Serial.println("[MQTT] SUCCESS Manual gate open command sent");
+      Serial.print("[MQTT] Topic: ");
+      Serial.println(gate_control_topic);
+      
+      // Hiển thị feedback trên màn hình
+      drawHeader("Parking Monitor", "Gate Opening...");
+      delay(1000);
+      drawHeader("Parking Monitor", mqttConnected ? "Connected" : "Disconnected");
+    } else {
+      Serial.println("[MQTT] ERROR Failed to send manual gate command");
+    }
+  } else {
+    Serial.println("[MQTT] ERROR MQTT not connected, cannot send command");
+  }
 }

@@ -17,9 +17,8 @@ const char* serverIP = "192.168.137.1";
 const int serverPort = 8000;
 const char* uploadEndpoint = "/api/upload-image";
 
-// MQTT Topics - Nhận trigger
+// MQTT Topics - Nhận trigger in
 #define TOPIC_TRIGGER_IN   "iot/parking/trigger/in"
-#define TOPIC_TRIGGER_OUT  "iot/parking/trigger/out"
 // Publish metadata 
 #define TOPIC_CAM_STATUS   "iot/parking/cam/status"
 
@@ -56,7 +55,7 @@ void setup() {
   delay(500);  
   
   Serial.println("\n\n========================================");
-  Serial.println("ESP32-CAM");
+  Serial.println("ESP32-CAM-IN");
   Serial.println("========================================");
   
   // Khởi tạo Flash LED
@@ -182,15 +181,12 @@ void connectMQTT() {
     if (mqtt.connect(clientId.c_str())) {
       Serial.println("[MQTT] SUCCESS Connected");
       
-      // Subscribe to trigger topics
+      // Subscribe trigger in
       mqtt.subscribe(TOPIC_TRIGGER_IN);
-      mqtt.subscribe(TOPIC_TRIGGER_OUT);
       
       Serial.println("[MQTT] Subscribed to:");
       Serial.print("  - ");
       Serial.println(TOPIC_TRIGGER_IN);
-      Serial.print("  - ");
-      Serial.println(TOPIC_TRIGGER_OUT);
       
       return;  
       
@@ -225,17 +221,15 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
   Serial.print("Message: ");
   Serial.println(message);
   
-  // Xác định hướng
   if (String(topic) == TOPIC_TRIGGER_IN) {
     currentDirection = "in";
-    Serial.println("Direction: ENTRANCE");
-  } else if (String(topic) == TOPIC_TRIGGER_OUT) {
-    currentDirection = "out";
-    Serial.println("Direction: EXIT");
+    Serial.println("Direction: ENTRANCE (CAM_IN)");
+    
+    // Chụp và upload ảnh
+    captureAndUpload();
+  } else {
+    Serial.println("[MQTT] ERROR Ignoring non-ENTRANCE trigger");
   }
-  
-  // Chụp và upload ảnh
-  captureAndUpload();
 }
 
 // Camera Functions
