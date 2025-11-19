@@ -1,221 +1,393 @@
 #include <WiFi.h>
 #include <PubSubClient.h>
+#include <HTTPClient.h>
+#include <Update.h>
+#include <ArduinoJson.h>
 #include "env.h"
 
-// Wifi
-const char* ssid = WIFI_SSID;       
-const char* password = WIFI_PASSWORD; 
+// Pins
+#define SENSOR1_PIN 34      // Cảm biến hồng ngoại slot 1
+#define SENSOR2_PIN 25      // Cảm biến hồng ngoại slot 2
+#define LED_OTA_PIN 27      // LED sáng khi đang update OTA
+#define LED_STATUS_PIN 12   // LED luôn sáng khi hoạt động bình thường
 
-// MQTT Topic                 
-const char* mqtt_topic = "iot/parking/slots"; 
+// MQTT Topics
+#define MQTT_TOPIC_SLOT "iot/parking/slots"
+#define MQTT_TOPIC_OTA "iot/parking/node/01/ota"
 
-// Sensor
-const int sensor1Pin = 34;  // Cảm biến hồng ngoại slot 1
-const int sensor2Pin = 25;  // Cảm biến hồng ngoại slot 2
+// Firmware version
+#define FIRMWARE_VERSION "1.0.1"
 
-// State
+// Slot IDs
+const char* SLOT1_ID = "A1";
+const char* SLOT2_ID = "A2";
+
+// Biến trạng thái
+WiFiClient espClient;
+PubSubClient mqtt(espClient);
+
+// Trạng thái cảm biến
 bool lastState1 = false;  // Trạng thái trước đó của slot 1
 bool lastState2 = false;  // Trạng thái trước đó của slot 2
-
-// ID Slot
-const char* slot1ID = "A1";
-const char* slot2ID = "A2";
 
 // Debounce
 unsigned long lastDebounceTime1 = 0;
 unsigned long lastDebounceTime2 = 0;
-const unsigned long debounceDelay = 500; // 500ms 
+const unsigned long debounceDelay = 500; // 500ms
 
-// MQTT Client 
-WiFiClient espClient;
-PubSubClient mqtt(espClient);
+// OTA Update
+bool otaInProgress = false;
 
-// Reconnect Interval
-unsigned long lastReconnectAttempt = 0;
-const unsigned long reconnectInterval = 5000;
-
-void setup() {
-  Serial.begin(115200);
-  Serial.println("\n=================================");
-  Serial.println("PARKING SLOT SENSOR");
-  Serial.println("=================================");
-
-  pinMode(sensor1Pin, INPUT);
-  pinMode(sensor2Pin, INPUT);
-  
-  Serial.println("[SENSOR] SUCCESS Sensors initialized");
-
-  // Kết nối WiFi
-  connectWiFi();
-  
-  // Cấu hình MQTT 
-  mqtt.setServer(MQTT_SERVER, MQTT_PORT);
-  mqtt.setBufferSize(512);  
-  mqtt.setKeepAlive(60);  
-  mqtt.setSocketTimeout(30); 
-  
-  Serial.println("[MQTT] MQTT configured");
-  
-  // Kết nối MQTT 
-  Serial.println("[MQTT] Connecting to MQTT broker");
-  while (!mqtt.connected()) {
-    if (reconnectMQTT()) {
-      Serial.println("[MQTT] SUCCESS connection successful!");
-      break;
-    }
-    Serial.println("[MQTT] Retrying in 2 seconds");
-    delay(2000);
-  }
-  
-  Serial.println("=================================");
-  Serial.println("System ready");
-  Serial.println("=================================");
-}
-
-void loop() {
-  // Kiểm tra và duy trì kết nối
-  if (!mqtt.connected()) {
-    unsigned long now = millis();
-    if (now - lastReconnectAttempt > reconnectInterval) {
-      lastReconnectAttempt = now;
-      if (reconnectMQTT()) {
-        lastReconnectAttempt = 0;
-      }
-    }
-  } else {
-    mqtt.loop();
-  }
-
-  // Đọc trạng thái cảm biến
-  checkSensor(sensor1Pin, slot1ID, lastState1, lastDebounceTime1);
-  checkSensor(sensor2Pin, slot2ID, lastState2, lastDebounceTime2);
-
-  delay(100); // Delay
-}
-
+// WiFi
 void connectWiFi() {
-  Serial.print("[WIFI] Connecting to WiFi: ");
-  Serial.println(ssid);
-  
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(ssid, password);
-
-  int attempts = 0;
-  while (WiFi.status() != WL_CONNECTED && attempts < 20) {
-    delay(500);
-    Serial.print(".");
-    attempts++;
-  }
-
-  if (WiFi.status() == WL_CONNECTED) {
-    Serial.println("\n[WIFI] SUCCESS WiFi connected");
-    Serial.print("[WIFI] IP address: ");
-    Serial.println(WiFi.localIP());
-  } else {
-    Serial.println("\n[WIFI] ERROR WiFi connection failed");
-    Serial.println("[WIFI] Restarting in 5 seconds");
-    delay(5000);
-    ESP.restart();
-  }
-}
-
-bool reconnectMQTT() {
-  Serial.print("[MQTT] Connecting to MQTT broker");
-
-  // Tạo client ID unique
-  String clientId = "ESP32_Node_";
-  clientId += String(random(0xffff), HEX);
-  
-  bool connected = mqtt.connect(clientId.c_str());
-  
-  if (connected) {
-    Serial.println("[MQTT] SUCCESS MQTT broker connected");
-       
-    // Gửi message online khi kết nối
-    publishStatus("system", "online");
+    Serial.println("[WiFi] Connecting to WiFi...");
+    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
     
-    return true;
-  } else {
-    Serial.print("[MQTT] ERROR Failed, rc=");
-    Serial.print(mqtt.state());
-
-    return false;
-  }
-}
-
-void checkSensor(int sensorPin, const char* slotID, bool &lastState, unsigned long &lastDebounceTime) {
-  // Đọc trạng thái cảm biến
-  // LOW = có vật thể, HIGH = không có vật thể
-  bool currentState = (digitalRead(sensorPin) == LOW);
-  
-  // Kiểm tra nếu trạng thái thay đổi
-  if (currentState != lastState) {
-    unsigned long now = millis();
-    
-    // Debounce
-    if (now - lastDebounceTime > debounceDelay) {
-      lastDebounceTime = now;
-      lastState = currentState;
-      
-      // Chỉ gửi nếu MQTT đã kết nối
-      if (mqtt.connected()) {
-        // Gửi trạng thái mới lên MQTT
-        publishSlotStatus(slotID, currentState);
-      } else {
-        Serial.print("[");
-        Serial.print(slotID);
-        Serial.println("] State changed but MQTT not connected");
-      }
+    int attempts = 0;
+    while (WiFi.status() != WL_CONNECTED && attempts < 20) {
+        delay(500);
+        Serial.print(".");
+        attempts++;
     }
-  }
+    
+    if (WiFi.status() == WL_CONNECTED) {
+        Serial.println("\n[WiFi] Connected!");
+        Serial.print("[WiFi] IP: ");
+        Serial.println(WiFi.localIP());
+    } else {
+        Serial.println("\n[WiFi] Connection failed!");
+    }
+}
+
+// MQTT
+void mqttCallback(char* topic, byte* payload, unsigned int length) {
+    Serial.print("[MQTT] Message arrived on topic: ");
+    Serial.println(topic);
+    
+    // Parse JSON payload
+    StaticJsonDocument<512> doc;
+    DeserializationError error = deserializeJson(doc, payload, length);
+    
+    if (error) {
+        Serial.print("[MQTT] JSON parse error: ");
+        Serial.println(error.c_str());
+        return;
+    }
+    
+    // Kiểm tra nếu là lệnh OTA
+    if (strcmp(topic, MQTT_TOPIC_OTA) == 0) {
+        const char* command = doc["command"];
+        
+        if (command && strcmp(command, "update") == 0) {
+            const char* firmwareUrl = doc["firmware_url"];
+            int firmwareSize = doc["firmware_size"];
+            
+            Serial.println("[OTA] Update command received!");
+            Serial.print("[OTA] Firmware URL: ");
+            Serial.println(firmwareUrl);
+            Serial.print("[OTA] Size: ");
+            Serial.println(firmwareSize);
+            
+            // Trigger OTA update
+            performOTAUpdate(firmwareUrl, firmwareSize);
+        }
+    }
+}
+
+void connectMQTT() {
+    while (!mqtt.connected()) {
+        Serial.print("[MQTT] Connecting to broker...");
+        Serial.print(MQTT_BROKER);
+        Serial.print(":");
+        Serial.print(MQTT_PORT);
+        Serial.print("...");
+        
+        String clientId = "NODE_01_";
+        clientId += String(random(0xffff), HEX);
+        
+        // Kết nối MQTT 
+        bool connected = false;
+       
+        connected = mqtt.connect(clientId.c_str());
+        
+        if (connected) {
+            Serial.println(" Connected!");
+            
+            // Subscribe to OTA topic
+            mqtt.subscribe(MQTT_TOPIC_OTA);
+            Serial.print("[MQTT] Subscribed to: ");
+            Serial.println(MQTT_TOPIC_OTA);
+            
+            // Publish online status
+            publishStatus();
+        } else {
+            Serial.print(" Failed, rc=");
+            Serial.print(mqtt.state());
+            Serial.println(" Retrying in 5s...");
+            delay(5000);
+        }
+    }
 }
 
 void publishSlotStatus(const char* slotID, bool isOccupied) {
-  // Double check MQTT 
-  if (!mqtt.connected()) {
-    Serial.println("[MQTT] MQTT disconnected");
-    return;
-  }
-
-  // Tạo JSON message
-  // Format: {"slot":"A1","occupied":true}
-  char message[100];
-  snprintf(message, sizeof(message), 
-           "{\"slot\":\"%s\",\"occupied\":%s}", 
-           slotID, 
-           isOccupied ? "true" : "false");
-
-  // Publish lên MQTT
-  bool success = mqtt.publish(mqtt_topic, message, false);
-
-  // Log kết quả
-  Serial.print("[SLOT] ");
-  Serial.print("[");
-  Serial.print(slotID);
-  Serial.print("] ");
-  Serial.print(isOccupied ? "OCCUPIED" : "FREE");
-  Serial.print(" → ");
-  
-  if (success) {
-    Serial.print("[MQTT] Published to '");
-    Serial.print(mqtt_topic);
-    Serial.print("': ");
-    Serial.println(message);
-  } else {
-    Serial.println("[MQTT] Publish failed");
-    Serial.print("[MQTT] State: ");
-    Serial.println(mqtt.state());
-  }
+    // Double check MQTT connection
+    if (!mqtt.connected()) {
+        Serial.println("[MQTT] MQTT disconnected");
+        return;
+    }
+    
+    // Tạo JSON message: {"slot":"A1","occupied":true}
+    StaticJsonDocument<128> doc;
+    doc["slot"] = slotID;
+    doc["occupied"] = isOccupied;
+    
+    char message[128];
+    serializeJson(doc, message);
+    
+    // Publish lên MQTT
+    bool success = mqtt.publish(MQTT_TOPIC_SLOT, message, false);
+    
+    // Log kết quả
+    Serial.print("[SLOT] [");
+    Serial.print(slotID);
+    Serial.print("] ");
+    Serial.print(isOccupied ? "OCCUPIED" : "FREE");
+    Serial.print(" → ");
+    
+    if (success) {
+        Serial.print("[MQTT] Published: ");
+        Serial.println(message);
+    } else {
+        Serial.println("[MQTT] Publish failed");
+    }
 }
 
-void publishStatus(const char* status_type, const char* value) {
-  char message[100];
-  snprintf(message, sizeof(message), 
-           "{\"type\":\"%s\",\"value\":\"%s\"}", 
-           status_type, 
-           value);
-  
-  mqtt.publish(mqtt_topic, message);
-  Serial.print("Status: ");
-  Serial.println(message);
+void checkSensor(int sensorPin, const char* slotID, bool &lastState, unsigned long &lastDebounceTime) {
+    // Đọc trạng thái cảm biến
+    // LOW = có vật thể (occupied), HIGH = không có vật thể (free)
+    bool currentState = (digitalRead(sensorPin) == LOW);
+    
+    // Kiểm tra nếu trạng thái thay đổi
+    if (currentState != lastState) {
+        unsigned long now = millis();
+        
+        // Debounce
+        if (now - lastDebounceTime > debounceDelay) {
+            lastDebounceTime = now;
+            lastState = currentState;
+            
+            // Chỉ gửi nếu MQTT đã kết nối và không đang OTA
+            if (mqtt.connected() && !otaInProgress) {
+                publishSlotStatus(slotID, currentState);
+            } else {
+                Serial.print("[");
+                Serial.print(slotID);
+                Serial.println("] State changed but not published (MQTT disconnected or OTA in progress)");
+            }
+        }
+    }
+}
+
+void publishStatus() {
+    StaticJsonDocument<256> doc;
+    doc["device"] = "NODE_01";
+    doc["status"] = "online";
+    doc["firmware_version"] = FIRMWARE_VERSION;
+    doc["ip"] = WiFi.localIP().toString();
+    
+    char buffer[256];
+    serializeJson(doc, buffer);
+    
+    mqtt.publish("iot/parking/node/01/status", buffer);
+}
+
+// OTA Update
+void performOTAUpdate(const char* url, int expectedSize) {
+    if (otaInProgress) {
+        Serial.println("[OTA] Update already in progress");
+        return;
+    }
+    
+    otaInProgress = true;
+    digitalWrite(LED_OTA_PIN, HIGH); // Bật LED OTA khi đang update
+    
+    Serial.println("[OTA] Starting OTA update");
+    Serial.print("[OTA] URL: ");
+    Serial.println(url);
+    Serial.print("[OTA] Expected size: ");
+    Serial.println(expectedSize);
+    
+    // Kiểm tra partition space
+    size_t updateSize = (expectedSize > 0) ? expectedSize : UPDATE_SIZE_UNKNOWN;
+    
+    HTTPClient http;
+    http.begin(url);
+    http.setTimeout(30000); // 30 seconds timeout
+    
+    int httpCode = http.GET();
+    
+    if (httpCode == HTTP_CODE_OK) {
+        int contentLength = http.getSize();
+        Serial.print("[OTA] Content length from server: ");
+        Serial.println(contentLength);
+        
+        if (contentLength > 0) {
+            // Sử dụng contentLength
+            if (!Update.begin(contentLength, U_FLASH)) {
+                Serial.println("[OTA] ERROR Not enough space for OTA!");
+                Serial.print("[OTA] Free sketch space: ");
+                Serial.println(ESP.getFreeSketchSpace());
+                Serial.print("[OTA] Required: ");
+                Serial.println(contentLength);
+                Update.printError(Serial);
+            } else {
+                Serial.println("[OTA] Begin update successful");
+                Serial.print("[OTA] Free sketch space: ");
+                Serial.println(ESP.getFreeSketchSpace());
+                
+                WiFiClient* stream = http.getStreamPtr();
+                
+                // Progress tracking
+                size_t written = 0;
+                size_t total = contentLength;
+                uint8_t buff[128];
+                int lastPercent = 0;
+                
+                while (http.connected() && (written < total)) {
+                    size_t available = stream->available();
+                    
+                    if (available) {
+                        int c = stream->readBytes(buff, min(available, sizeof(buff)));
+                        
+                        if (c > 0) {
+                            if (Update.write(buff, c) != c) {
+                                Serial.println("[OTA] ERROR Write failed");
+                                break;
+                            }
+                            written += c;
+                            
+                            // Show progress every 10%
+                            int percent = (written * 100) / total;
+                            if (percent >= lastPercent + 10) {
+                                lastPercent = percent;
+                                Serial.print("[OTA] Progress: ");
+                                Serial.print(percent);
+                                Serial.print("% (");
+                                Serial.print(written);
+                                Serial.print("/");
+                                Serial.print(total);
+                                Serial.println(")");
+                            }
+                        }
+                    }
+                    delay(1);
+                }
+                
+                Serial.print("[OTA] Written: ");
+                Serial.print(written);
+                Serial.print(" / ");
+                Serial.println(total);
+                
+                if (written == total) {
+                    Serial.println("[OTA] SUCCESS All bytes written successfully!");
+                } else {
+                    Serial.println("[OTA] ERROR Write size mismatch");
+                }
+                
+                if (Update.end(true)) {
+                    if (Update.isFinished()) {
+                        Serial.println("[OTA] SUCCESS Update finished successfully");
+                        Serial.println("[OTA] Rebooting in 3 seconds");
+                        
+                        // Publish success status
+                        StaticJsonDocument<128> statusDoc;
+                        statusDoc["status"] = "success";
+                        statusDoc["message"] = "OTA completed, rebooting...";
+                        
+                        char statusBuffer[128];
+                        serializeJson(statusDoc, statusBuffer);
+                        mqtt.publish("iot/parking/node/01/ota/status", statusBuffer);
+                        
+                        delay(3000);
+                        ESP.restart();
+                    } else {
+                        Serial.println("[OTA] ERROR Update not finished");
+                    }
+                } else {
+                    Serial.print("[OTA] ERROR Update error: ");
+                    Serial.println(Update.getError());
+                    Update.printError(Serial);
+                }
+            }
+        } else {
+            Serial.println("[OTA] ERROR Invalid content length!");
+        }
+    } else {
+        Serial.print("[OTA] ERROR HTTP error: ");
+        Serial.println(httpCode);
+    }
+    
+    http.end();
+    otaInProgress = false;
+    digitalWrite(LED_OTA_PIN, LOW); // Tắt LED OTA sau khi update xong
+}
+
+// Setup & Loop
+void setup() {
+    Serial.begin(115200);
+    delay(1000);
+    
+    Serial.println("\n\n==================================");
+    Serial.println("NODE - Parking Slot Sensor");
+    Serial.print("Firmware Version: ");
+    Serial.println(FIRMWARE_VERSION);
+    Serial.println("==================================\n");
+    
+    // Setup pins
+    pinMode(SENSOR1_PIN, INPUT);
+    pinMode(SENSOR2_PIN, INPUT);
+    pinMode(LED_OTA_PIN, OUTPUT);
+    pinMode(LED_STATUS_PIN, OUTPUT);
+    
+    digitalWrite(LED_OTA_PIN, LOW);
+    digitalWrite(LED_STATUS_PIN, HIGH);  // LED status
+    
+    Serial.println("[SENSOR] SUCCESS Sensors initialized");
+    
+    // Connect WiFi
+    connectWiFi();
+    
+    // Setup MQTT
+    mqtt.setServer(MQTT_BROKER, MQTT_PORT);
+    mqtt.setCallback(mqttCallback);
+    mqtt.setBufferSize(512);
+    
+    // Connect MQTT
+    connectMQTT();
+    
+    Serial.println("[SYSTEM] Initialization complete!");
+}
+
+void loop() {
+    // Maintain connections
+    if (WiFi.status() != WL_CONNECTED) {
+        connectWiFi();
+    }
+    
+    if (!mqtt.connected()) {
+        connectMQTT();
+    }
+    
+    mqtt.loop();
+    
+    // Skip sensor reading if OTA in progress
+    if (otaInProgress) {
+        return;
+    }
+    
+    // Đọc và xử lý trạng thái 2 cảm biến với debounce
+    checkSensor(SENSOR1_PIN, SLOT1_ID, lastState1, lastDebounceTime1);
+    checkSensor(SENSOR2_PIN, SLOT2_ID, lastState2, lastDebounceTime2);
+    
+    delay(100);
 }
