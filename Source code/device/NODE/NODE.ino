@@ -2,79 +2,79 @@
 #include <PubSubClient.h>
 #include "env.h"
 
-// CẤU HÌNH WIFI
+// Wifi
 const char* ssid = WIFI_SSID;       
 const char* password = WIFI_PASSWORD; 
 
-// CẤU HÌNH MQTT
-const char* mqtt_server = "192.168.137.1";    
-const int mqtt_port = 1883;                   
+// MQTT Topic                 
 const char* mqtt_topic = "iot/parking/slots"; 
 
-// CẤU HÌNH SENSOR
+// Sensor
 const int sensor1Pin = 34;  // Cảm biến hồng ngoại slot 1
 const int sensor2Pin = 25;  // Cảm biến hồng ngoại slot 2
 
-// TRẠNG THÁI
+// State
 bool lastState1 = false;  // Trạng thái trước đó của slot 1
 bool lastState2 = false;  // Trạng thái trước đó của slot 2
 
-// ID SLOT
+// ID Slot
 const char* slot1ID = "A1";
 const char* slot2ID = "A2";
 
-// THỜI GIAN DEBOUNCE
+// Debounce
 unsigned long lastDebounceTime1 = 0;
 unsigned long lastDebounceTime2 = 0;
-const unsigned long debounceDelay = 500; // 500ms debounce
+const unsigned long debounceDelay = 500; // 500ms 
 
-// MQTT CLIENT 
-WiFiClient espClient;  // WiFi client thông thường 
-PubSubClient mqttClient(espClient);
+// MQTT Client 
+WiFiClient espClient;
+PubSubClient mqtt(espClient);
 
-// RECONNECT INTERVAL
+// Reconnect Interval
 unsigned long lastReconnectAttempt = 0;
-const unsigned long reconnectInterval = 5000; // Thử kết nối lại mỗi 5s
+const unsigned long reconnectInterval = 5000;
 
 void setup() {
   Serial.begin(115200);
-  Serial.println("NODE ESP32 - Parking Slot Sensor");
+  Serial.println("\n=================================");
+  Serial.println("PARKING SLOT SENSOR");
+  Serial.println("=================================");
 
-  // Cấu hình pin sensor
   pinMode(sensor1Pin, INPUT);
   pinMode(sensor2Pin, INPUT);
   
-  Serial.println("Sensors initialized");
+  Serial.println("[SENSOR] SUCCESS Sensors initialized");
 
   // Kết nối WiFi
   connectWiFi();
   
   // Cấu hình MQTT 
-  mqttClient.setServer(mqtt_server, mqtt_port);
-  mqttClient.setBufferSize(512);  //buffer size
-  mqttClient.setKeepAlive(60);  // Keep alive 60s
-  mqttClient.setSocketTimeout(30);  // Socket timeout 30s
+  mqtt.setServer(MQTT_SERVER, MQTT_PORT);
+  mqtt.setBufferSize(512);  
+  mqtt.setKeepAlive(60);  
+  mqtt.setSocketTimeout(30); 
   
-  Serial.println("MQTT configured (broker.emqx.io:1883)");
+  Serial.println("[MQTT] MQTT configured");
   
   // Kết nối MQTT 
-  Serial.println("\nConnecting to MQTT broker...");
-  while (!mqttClient.connected()) {
+  Serial.println("[MQTT] Connecting to MQTT broker");
+  while (!mqtt.connected()) {
     if (reconnectMQTT()) {
-      Serial.println("Initial MQTT connection successful!");
+      Serial.println("[MQTT] SUCCESS connection successful!");
       break;
     }
-    Serial.println("Retrying in 2 seconds...");
+    Serial.println("[MQTT] Retrying in 2 seconds");
     delay(2000);
   }
   
-  Serial.println("=================================\n");
-  Serial.println("System ready! Monitoring sensors...\n");
+  Serial.println("=================================");
+  Serial.println("System ready");
+  Serial.println("=================================");
 }
 
 void loop() {
   // Kiểm tra và duy trì kết nối
-  if (!mqttClient.connected()) {
+  if (!mqtt.connected()) {
     unsigned long now = millis();
     if (now - lastReconnectAttempt > reconnectInterval) {
       lastReconnectAttempt = now;
@@ -83,7 +83,7 @@ void loop() {
       }
     }
   } else {
-    mqttClient.loop();
+    mqtt.loop();
   }
 
   // Đọc trạng thái cảm biến
@@ -94,7 +94,7 @@ void loop() {
 }
 
 void connectWiFi() {
-  Serial.print("Connecting to WiFi: ");
+  Serial.print("[WIFI] Connecting to WiFi: ");
   Serial.println(ssid);
   
   WiFi.mode(WIFI_STA);
@@ -108,46 +108,36 @@ void connectWiFi() {
   }
 
   if (WiFi.status() == WL_CONNECTED) {
-    Serial.println("\nWiFi connected!");
-    Serial.print("IP address: ");
+    Serial.println("\n[WIFI] SUCCESS WiFi connected");
+    Serial.print("[WIFI] IP address: ");
     Serial.println(WiFi.localIP());
-    Serial.print("MAC address: ");
-    Serial.println(WiFi.macAddress());
   } else {
-    Serial.println("\nWiFi connection failed!");
-    Serial.println("Restarting in 5 seconds...");
+    Serial.println("\n[WIFI] ERROR WiFi connection failed");
+    Serial.println("[WIFI] Restarting in 5 seconds");
     delay(5000);
     ESP.restart();
   }
 }
 
 bool reconnectMQTT() {
-  Serial.print("Connecting to MQTT broker...");
-  Serial.print("\nServer: ");
-  Serial.println(mqtt_server);
-  Serial.print("Port: ");
-  Serial.println(mqtt_port);
-  
+  Serial.print("[MQTT] Connecting to MQTT broker");
+
   // Tạo client ID unique
   String clientId = "ESP32_Node_";
   clientId += String(random(0xffff), HEX);
   
-  Serial.print("Client ID: ");
-  Serial.println(clientId);
-  Serial.print("Attempting connection...");
-  
-  bool connected = mqttClient.connect(clientId.c_str());
+  bool connected = mqtt.connect(clientId.c_str());
   
   if (connected) {
-    Serial.println(" ✓ Connected!");
+    Serial.println("[MQTT] SUCCESS MQTT broker connected");
        
     // Gửi message online khi kết nối
     publishStatus("system", "online");
     
     return true;
   } else {
-    Serial.print("Failed, rc=");
-    Serial.print(mqttClient.state());
+    Serial.print("[MQTT] ERROR Failed, rc=");
+    Serial.print(mqtt.state());
 
     return false;
   }
@@ -168,22 +158,22 @@ void checkSensor(int sensorPin, const char* slotID, bool &lastState, unsigned lo
       lastState = currentState;
       
       // Chỉ gửi nếu MQTT đã kết nối
-      if (mqttClient.connected()) {
+      if (mqtt.connected()) {
         // Gửi trạng thái mới lên MQTT
         publishSlotStatus(slotID, currentState);
       } else {
         Serial.print("[");
         Serial.print(slotID);
-        Serial.println("] State changed but MQTT not connected, will retry...");
+        Serial.println("] State changed but MQTT not connected");
       }
     }
   }
 }
 
 void publishSlotStatus(const char* slotID, bool isOccupied) {
-  // Double check MQTT connection
-  if (!mqttClient.connected()) {
-    Serial.println("MQTT disconnected in publishSlotStatus!");
+  // Double check MQTT 
+  if (!mqtt.connected()) {
+    Serial.println("[MQTT] MQTT disconnected");
     return;
   }
 
@@ -196,9 +186,10 @@ void publishSlotStatus(const char* slotID, bool isOccupied) {
            isOccupied ? "true" : "false");
 
   // Publish lên MQTT
-  bool success = mqttClient.publish(mqtt_topic, message, false);
+  bool success = mqtt.publish(mqtt_topic, message, false);
 
   // Log kết quả
+  Serial.print("[SLOT] ");
   Serial.print("[");
   Serial.print(slotID);
   Serial.print("] ");
@@ -206,14 +197,14 @@ void publishSlotStatus(const char* slotID, bool isOccupied) {
   Serial.print(" → ");
   
   if (success) {
-    Serial.print("✓ Published to '");
+    Serial.print("[MQTT] Published to '");
     Serial.print(mqtt_topic);
     Serial.print("': ");
     Serial.println(message);
   } else {
-    Serial.println("✗ Publish failed!");
-    Serial.print("   MQTT State: ");
-    Serial.println(mqttClient.state());
+    Serial.println("[MQTT] Publish failed");
+    Serial.print("[MQTT] State: ");
+    Serial.println(mqtt.state());
   }
 }
 
@@ -224,7 +215,7 @@ void publishStatus(const char* status_type, const char* value) {
            status_type, 
            value);
   
-  mqttClient.publish(mqtt_topic, message);
+  mqtt.publish(mqtt_topic, message);
   Serial.print("Status: ");
   Serial.println(message);
 }

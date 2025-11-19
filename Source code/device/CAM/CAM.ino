@@ -8,29 +8,25 @@
 #include <ArduinoJson.h>
 #include "env.h"
 
-// ==================== WiFi Configuration ====================
+// WiFi 
 const char* ssid = WIFI_SSID;
 const char* password = WIFI_PASSWORD;
 
-// ==================== Server Configuration ====================
+// Server 
 const char* serverIP = "192.168.137.1";
 const int serverPort = 8000;
 const char* uploadEndpoint = "/api/upload-image";
 
-// ==================== MQTT Configuration ====================
-const char* mqtt_server = "192.168.137.1";
-const int mqtt_port = 1883;
-
-// MQTT Topics - Subscribe để nhận trigger từ GATE
+// MQTT Topics - Nhận trigger
 #define TOPIC_TRIGGER_IN   "iot/parking/trigger/in"
 #define TOPIC_TRIGGER_OUT  "iot/parking/trigger/out"
-// Publish metadata về server (qua MQTT cho logging, optional)
+// Publish metadata 
 #define TOPIC_CAM_STATUS   "iot/parking/cam/status"
 
-// ==================== GPIO PINS ====================
+// FLASH PINS
 #define FLASH_LED 4
 
-// ==================== Camera Pins (AI-Thinker) ====================
+// Camera Pins (AI-Thinker)
 #define PWDN_GPIO_NUM 32
 #define RESET_GPIO_NUM -1
 #define XCLK_GPIO_NUM 0
@@ -48,22 +44,19 @@ const int mqtt_port = 1883;
 #define HREF_GPIO_NUM 23
 #define PCLK_GPIO_NUM 22
 
-// ==================== Global Objects ====================
+// Global Objects
 WiFiClient espClient;
 PubSubClient mqtt(espClient);
 
 String currentDirection = "";
 
-// ==================== Setup ====================
+// Setup
 void setup() {
-  // Disable brownout detector (nguồn yếu có thể gây reset)
-  WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0);
-  
   Serial.begin(115200);
-  delay(500);  // Cho serial monitor ổn định
+  delay(500);  
   
   Serial.println("\n\n========================================");
-  Serial.println("ESP32-CAM with MQTT Trigger");
+  Serial.println("ESP32-CAM");
   Serial.println("========================================");
   
   // Khởi tạo Flash LED
@@ -71,13 +64,13 @@ void setup() {
   digitalWrite(FLASH_LED, LOW);
   
   // Khởi tạo Camera
-  Serial.println("Initializing camera...");
+  Serial.println("[CAMERA] Initializing camera");
   if (!initCamera()) {
-    Serial.println("✗ Camera init failed!");
+    Serial.println("[CAMERA] ERROR Camera init failed!");
     delay(3000);
     ESP.restart();
   }
-  Serial.println("✓ Camera initialized");
+  Serial.println("[CAMERA] SUCCESS Camera initialized");
   Serial.println("Free heap: " + String(ESP.getFreeHeap()) + " bytes");
   Serial.println("PSRAM free: " + String(ESP.getFreePsram()) + " bytes");
   
@@ -85,31 +78,37 @@ void setup() {
   yield();
   delay(100);
   
-  // Kết nối WiFi (đã có yield() bên trong)
+  // Kết nối WiFi 
   connectWiFi();
   
-  Serial.println("WiFi connected, preparing MQTT...");
+  Serial.println("[WIFI] SUCCESS WiFi connected");
   yield();
   delay(100);
   
   // Cấu hình MQTT
-  mqtt.setServer(mqtt_server, mqtt_port);
+  mqtt.setServer(MQTT_SERVER, MQTT_PORT);
   mqtt.setCallback(mqttCallback);
-  mqtt.setBufferSize(512);  // Tăng buffer size nếu cần
+  mqtt.setBufferSize(512); 
   
-  Serial.println("MQTT configured, connecting...");
+  Serial.println("[MQTT] MQTT configured, connecting");
   yield();
   delay(100);
   
-  // Kết nối MQTT (đã có retry limit)
+  // Kết nối MQTT 
   connectMQTT();
   
   Serial.println("========================================");
-  Serial.println("System Ready - Waiting for triggers...");
+  Serial.println("System Ready");
   Serial.println("========================================\n");
 }
 
 void loop() {
+  // Kiểm tra kết nối WiFi
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("\n[WIFI] ERROR WiFi disconnected! Reconnecting");
+    connectWiFi();
+  }
+  
   // Duy trì kết nối MQTT
   if (!mqtt.connected()) {
     connectMQTT();
@@ -121,12 +120,12 @@ void loop() {
   delay(10);
 }
 
-// ==================== WiFi Functions ====================
+// WiFi Functions
 void connectWiFi() {
-  Serial.print("Connecting to WiFi: ");
+  Serial.print("[WIFI] Connecting to WiFi: ");
   Serial.println(ssid);
   
-  // Disconnect first (important for ESP32-CAM)
+  // Disconnect first
   WiFi.disconnect(true);
   delay(1000);
   
@@ -137,12 +136,14 @@ void connectWiFi() {
   WiFi.begin(ssid, password);
   
   int attempts = 0;
-  while (WiFi.status() != WL_CONNECTED && attempts < 60) {  // Tăng lên 60 (30s)
+  const int maxAttempts = 60;  // 30 giây timeout
+  
+  while (WiFi.status() != WL_CONNECTED && attempts < maxAttempts) {
     delay(500);
     Serial.print(".");
     attempts++;
     
-    // Feed watchdog timer (critical!)
+    // Feed watchdog timer 
     yield();
     
     // Debug every 10 attempts
@@ -154,47 +155,47 @@ void connectWiFi() {
   }
   
   if (WiFi.status() == WL_CONNECTED) {
-    Serial.println("\n✓ WiFi Connected!");
-    Serial.print("IP: ");
+    Serial.println("\n[WIFI] WiFi Connected");
+    Serial.print("[WIFI] IP: ");
     Serial.println(WiFi.localIP());
-    Serial.print("Signal: ");
+    Serial.print("[WIFI] Signal: ");
     Serial.print(WiFi.RSSI());
     Serial.println(" dBm");
   } else {
-    Serial.println("\n✗ WiFi Failed!");
-    Serial.println("Restarting in 5s...");
-    delay(5000);
+    Serial.println("\n[WIFI] ERROR WiFi Connection Failed");
+    Serial.println("[SYSTEM] Timeout after 30 seconds - Restarting...");
+    delay(2000);
     ESP.restart();
   }
 }
 
-// ==================== MQTT Functions ====================
+// MQTT Functions
 void connectMQTT() {
   int retries = 0;
-  const int maxRetries = 5;  // Giới hạn retry để tránh watchdog
+  const int maxRetries = 5;  // Giới hạn retry 
   
   while (!mqtt.connected() && retries < maxRetries) {
-    Serial.print("Connecting to MQTT...");
+    Serial.print("[MQTT] Connecting to MQTT...");
     
     String clientId = "ESP32_CAM_" + String(random(0xffff), HEX);
     
     if (mqtt.connect(clientId.c_str())) {
-      Serial.println(" ✓ Connected!");
+      Serial.println("[MQTT] SUCCESS Connected");
       
       // Subscribe to trigger topics
       mqtt.subscribe(TOPIC_TRIGGER_IN);
       mqtt.subscribe(TOPIC_TRIGGER_OUT);
       
-      Serial.println("✓ Subscribed to:");
+      Serial.println("[MQTT] Subscribed to:");
       Serial.print("  - ");
       Serial.println(TOPIC_TRIGGER_IN);
       Serial.print("  - ");
       Serial.println(TOPIC_TRIGGER_OUT);
       
-      return;  // Exit khi connect OK
+      return;  
       
     } else {
-      Serial.print(" ✗ Failed, rc=");
+      Serial.print("[MQTT] ERROR Failed, rc=");
       Serial.print(mqtt.state());
       Serial.print(" Retry ");
       Serial.print(retries + 1);
@@ -203,14 +204,12 @@ void connectMQTT() {
       
       retries++;
       delay(5000);
-      yield();  // Feed watchdog
+      yield();  
     }
   }
   
-  // Nếu vượt quá max retries
   if (!mqtt.connected()) {
-    Serial.println("\n✗ MQTT connection failed after max retries");
-    Serial.println("System will continue without MQTT (restart to retry)");
+    Serial.println("\n[MQTT] ERROT MQTT connection failed, continue without MQTT");
   }
 }
 
@@ -220,7 +219,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     message += (char)payload[i];
   }
   
-  Serial.println("\n>>> MQTT TRIGGER RECEIVED <<<");
+  Serial.println("\n=== MQTT TRIGGER RECEIVED ===");
   Serial.print("Topic: ");
   Serial.println(topic);
   Serial.print("Message: ");
@@ -239,7 +238,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
   captureAndUpload();
 }
 
-// ==================== Camera Functions ====================
+// Camera Functions
 bool initCamera() {
   camera_config_t config;
   config.ledc_channel = LEDC_CHANNEL_0;
@@ -265,27 +264,27 @@ bool initCamera() {
   config.fb_location = CAMERA_FB_IN_PSRAM;
   config.grab_mode = CAMERA_GRAB_LATEST;
   
-  // Cấu hình độ phân giải - TĂNG CHẤT LƯỢNG
+  // Cấu hình độ phân giải 
   if (psramFound()) {
     config.frame_size = FRAMESIZE_UXGA;   // 1600x1200 - Độ phân giải cao nhất
-    config.jpeg_quality = 10;             // 0-63, thấp hơn = chất lượng cao hơn (10 = vừa phải)
+    config.jpeg_quality = 10;             // 0-63
     config.fb_count = 2;
-    Serial.println("Camera: UXGA mode (1600x1200) with PSRAM - High Quality");
+    Serial.println("[CAMERA] UXGA mode with PSRAM");
   } else {
     config.frame_size = FRAMESIZE_SVGA;   // 800x600
     config.jpeg_quality = 8;
     config.fb_count = 1;
-    Serial.println("Camera: SVGA mode (no PSRAM)");
+    Serial.println("[CAMERA] SVGA mode, no PSRAM");
   }
   
   // Khởi tạo camera
   esp_err_t err = esp_camera_init(&config);
   if (err != ESP_OK) {
-    Serial.printf("Camera init failed: 0x%x\n", err);
+    Serial.printf("[CAMERA] ERROR Camera init failed: 0x%x\n", err);
     return false;
   }
   
-  // Tối ưu hóa sensor cho chất lượng ảnh cao
+  // Tối ưu hóa sensor 
   sensor_t *s = esp_camera_sensor_get();
   if (s != NULL) {
     s->set_brightness(s, -1);      // -2 to 2 (-1 = giảm độ sáng)
@@ -309,7 +308,7 @@ bool initCamera() {
     s->set_dcw(s, 0);              // Downsize EN (TẮT để giữ full resolution)
     s->set_colorbar(s, 0);         // Color bar OFF
     
-    Serial.println("Sensor optimized for HIGH QUALITY OCR");
+    Serial.println("[CAMERA] Sensor configed");
   }
   
   return true;
@@ -318,70 +317,70 @@ bool initCamera() {
 void captureAndUpload() {
   Serial.println("\n=== CAPTURE & UPLOAD ===");
   
-  // Clear old frames (important to prevent EV-EOF-OVF)
-  Serial.println("Clearing camera buffer...");
+  // Clear old frames
+  Serial.println("[CAMERA] Clearing camera buffer");
   camera_fb_t *fb_clear = esp_camera_fb_get();
   if (fb_clear) {
     esp_camera_fb_return(fb_clear);
   }
-  delay(200);  // Tăng delay để buffer ổn định
+  delay(200); 
   
   // Bật flash
   digitalWrite(FLASH_LED, HIGH);
-  delay(150);  // Giảm delay flash để giảm độ sáng
+  delay(150);  
   
   // Chụp ảnh
-  Serial.println("Capturing HIGH QUALITY image...");
+  Serial.println("[CAMERA] Capturing image");
   camera_fb_t *fb = esp_camera_fb_get();
   
   // Tắt flash
   digitalWrite(FLASH_LED, LOW);
   
   if (!fb) {
-    Serial.println("✗ Camera capture failed");
+    Serial.println("[CAMERA] ERROR Camera capture failed");
     notifyCamStatus("capture_failed");
     return;
   }
   
   // Verify JPEG header
   if (fb->len < 1000 || fb->buf[0] != 0xFF || fb->buf[1] != 0xD8) {
-    Serial.println("✗ Invalid JPEG data!");
+    Serial.println("[CAMERA] ERROR Invalid JPEG data!");
     esp_camera_fb_return(fb);
     notifyCamStatus("invalid_image");
     return;
   }
   
-  Serial.printf("✓ Image captured: %d bytes\n", fb->len);
-  Serial.printf("  Resolution: %dx%d\n", fb->width, fb->height);
+  Serial.printf("[CAMERA] SUCCESS Image captured: %d bytes\n", fb->len);
+  //Serial.printf("  Resolution: %dx%d\n", fb->width, fb->height);
   
-  // Upload qua HTTP - Server sẽ xử lý OCR và điều khiển GATE
+  // Upload qua HTTP 
   bool upload_success = uploadToServer(fb);
   
-  // Giải phóng buffer
+  // Clear buffer
   esp_camera_fb_return(fb);
   
-  // CRITICAL: Delay sau khi return buffer để tránh EV-EOF-OVF
+  // Delay sau khi return buffer để tránh EV-EOF-OVF
   delay(500);
   
   if (upload_success) {
-    Serial.println("✓ Complete: Image captured and uploaded successfully");
+    Serial.println("[SYSTEM] SUCCESS Image captured and uploaded");
   } else {
-    Serial.println("✗ Complete: Upload failed");
+    Serial.println("[SYSTEM] ERROR Upload failed");
   }
 }
 
 bool uploadToServer(camera_fb_t *fb) {
-  Serial.println("\n--- Uploading to Server ---");
+  Serial.println("\n=== Uploading ===");
   
   WiFiClient client;
   
   if (!client.connect(serverIP, serverPort)) {
-    Serial.println("✗ Connection failed");
+    Serial.println("[WIFI_CLIENT] ERROR Connection failed");
     notifyCamStatus("upload_failed");
     return false;
   }
   
-  Serial.println("✓ Connected to server");
+  Serial.println("[WIFI_CLIENT] Connected to server");
   
   // Tạo boundary cho multipart
   String boundary = "----ESP32CAM" + String(millis());
@@ -411,7 +410,7 @@ bool uploadToServer(camera_fb_t *fb) {
   size_t size = fb->len;
   size_t sent = 0;
   
-  Serial.printf("Uploading %d bytes", size);
+  Serial.printf("[WIFI_CLIENT] Uploading %d bytes", size);
   unsigned long upload_start = millis();
   
   while (sent < size) {
@@ -419,7 +418,7 @@ bool uploadToServer(camera_fb_t *fb) {
     size_t written = client.write(buf + sent, chunk);
     
     if (written != chunk) {
-      Serial.printf("\n✗ Upload error: Expected %d, wrote %d\n", chunk, written);
+      Serial.printf("\n[WIFI_CLIENT] Upload error: Expected %d, wrote %d\n", chunk, written);
       client.stop();
       return false;
     }
@@ -434,19 +433,19 @@ bool uploadToServer(camera_fb_t *fb) {
   }
   
   unsigned long upload_time = millis() - upload_start;
-  Serial.printf(" Done! (%lu ms)\n", upload_time);
+  Serial.printf("[WIFI_CLIENT] Done! (%lu ms)\n", upload_time);
   
   // Gửi tail
   client.print(tail);
   
-  Serial.printf("✓ Uploaded %d bytes in %lu ms (%.2f KB/s)\n", 
+  Serial.printf("[WIFI_CLIENT]  Uploaded %d bytes in %lu ms (%.2f KB/s)\n", 
     sent, upload_time, (sent / 1024.0) / (upload_time / 1000.0));
   
-  // Đọc response (chỉ để log, không cần parse)
+  // Đọc response
   unsigned long timeout = millis();
   while (client.available() == 0) {
     if (millis() - timeout > 10000) {
-      Serial.println("✗ Response timeout");
+      Serial.println("[WIFI_CLIENT] Response timeout");
       client.stop();
       notifyCamStatus("timeout");
       return false;
@@ -454,7 +453,7 @@ bool uploadToServer(camera_fb_t *fb) {
   }
   
   // Log response
-  Serial.println("\n--- Server Response ---");
+  Serial.println("\n=== Server Response ===");
   while (client.available()) {
     String line = client.readStringUntil('\n');
     if (line.startsWith("{")) {
@@ -467,7 +466,7 @@ bool uploadToServer(camera_fb_t *fb) {
   // Thông báo upload thành công
   notifyCamStatus("uploaded");
   
-  Serial.println("✓ Upload complete - Server will handle OCR and gate control");
+  Serial.println("[WIFI_CLIENT] SUCCESS Upload complete, Server received");
   
   return true;
 }

@@ -4,21 +4,19 @@
 #include <ArduinoJson.h>
 #include "env.h"
 
-// CẤU HÌNH WIFI
+// Wifi
 const char* ssid = WIFI_SSID;
 const char* password = WIFI_PASSWORD;
 
-// CẤU HÌNH MQTT 
-const char* mqtt_server = "192.168.137.1";   
-const int mqtt_port = 1883;                   
+// MQTT Topic            
 const char* mqtt_topic = "iot/parking/slots"; 
 
-// TFT DISPLAY
+// TFT display
 TFT_eSPI tft = TFT_eSPI();
 
-// MQTT CLIENT
+// MQTT client
 WiFiClient espClient;
-PubSubClient mqttClient(espClient);
+PubSubClient mqtt(espClient);
 
 // PARKING SLOTS
 #define SLOT_COUNT 8
@@ -53,7 +51,7 @@ const unsigned long reconnectInterval = 5000;
 void setup() {
   Serial.begin(115200);
   Serial.println("\n=================================");
-  Serial.println("MONITOR - LilyGO T-Display S3");
+  Serial.println("PARKING SLOT MONITOR");
   Serial.println("=================================");
 
   // Khởi tạo màn hình
@@ -71,9 +69,9 @@ void setup() {
   connectWiFi();
   
   // Cấu hình MQTT
-  mqttClient.setServer(mqtt_server, mqtt_port);
-  mqttClient.setCallback(mqttCallback);
-  mqttClient.setBufferSize(512);
+  mqtt.setServer(MQTT_SERVER, MQTT_PORT);
+  mqtt.setCallback(mqttCallback);
+  mqtt.setBufferSize(512);
   
   // Kết nối MQTT
   connectMQTT();
@@ -81,12 +79,12 @@ void setup() {
   // Vẽ giao diện
   drawUI();
   
-  Serial.println("System ready!");
+  Serial.println("[SYSTEM] SUCCESS System ready!");
 }
 
 void loop() {
   // Duy trì kết nối MQTT
-  if (!mqttClient.connected()) {
+  if (!mqtt.connected()) {
     unsigned long now = millis();
     if (now - lastReconnectAttempt > reconnectInterval) {
       lastReconnectAttempt = now;
@@ -95,7 +93,7 @@ void loop() {
       }
     }
   } else {
-    mqttClient.loop();
+    mqtt.loop();
   }
   
   // Kiểm tra WiFi
@@ -124,11 +122,11 @@ void initSlots() {
     slots[i].lastUpdate = 0;
   }
   
-  Serial.println("Slots initialized");
+  Serial.println("[SYSTEM] Slots initialized");
 }
 
 void connectWiFi() {
-  Serial.print("Connecting to WiFi");
+  Serial.print("[WIFI] Connecting to WiFi");
   drawHeader("Parking Monitor", "Connecting WiFi...");
   
   WiFi.mode(WIFI_STA);
@@ -143,40 +141,40 @@ void connectWiFi() {
   
   if (WiFi.status() == WL_CONNECTED) {
     wifiConnected = true;
-    Serial.println("\n WiFi connected!");
-    Serial.print("IP: ");
+    Serial.println("\n[WIFI] SUCCESS WiFi connected!");
+    Serial.print("[WIFI] IP: ");
     Serial.println(WiFi.localIP());
   } else {
     wifiConnected = false;
-    Serial.println("\n WiFi connection failed!");
+    Serial.println("\n[WIFI] ERROR WiFi connection failed!");
   }
 }
 
 bool connectMQTT() {
-  Serial.print("Connecting to MQTT broker...");
-  drawHeader("Parking Monitor", "Connecting MQTT...");
+  Serial.print("[MQTT] Connecting to MQTT broker");
+  drawHeader("Parking Monitor", "Connecting MQTT");
   
   String clientId = "ESP32_Monitor_";
   clientId += String(random(0xffff), HEX);
   
-  if (mqttClient.connect(clientId.c_str())) {
+  if (mqtt.connect(clientId.c_str())) {
     mqttConnected = true;
-    Serial.println(" Connected!");
+    Serial.println("[MQTT] SUCCESS MQTT broker connected");
     
     // Subscribe to topic
-    if (mqttClient.subscribe(mqtt_topic, 1)) {
-      Serial.print(" Subscribed to: ");
+    if (mqtt.subscribe(mqtt_topic, 1)) {
+      Serial.print("[MQTT] Subscribed to: ");
       Serial.println(mqtt_topic);
     } else {
-      Serial.println(" Subscribe failed!");
+      Serial.println("[MQTT] ERROR Subscribe failed!");
     }
     
     drawHeader("Parking Monitor", "Connected");
     return true;
   } else {
     mqttConnected = false;
-    Serial.print("  Failed, rc=");
-    Serial.println(mqttClient.state());
+    Serial.print("[MQTT] ERROT Failed, rc=");
+    Serial.println(mqtt.state());
     drawHeader("Parking Monitor", "MQTT Error");
     return false;
   }
@@ -198,11 +196,11 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
   bool occupied = doc["occupied"];
   
   if (slotId == nullptr) {
-    Serial.println("Invalid message: missing 'slot' field");
+    Serial.println("[SYSTEM] ERROR Invalid message: missing 'slot' field");
     return;
   }
   
-  Serial.print(" MQTT: ");
+  Serial.print("[MQTT] MQTT: ");
   Serial.print(slotId);
   Serial.print(" -> ");
   Serial.println(occupied ? "OCCUPIED" : "EMPTY");
@@ -218,7 +216,7 @@ void updateSlot(String slotId, bool occupied) {
         slots[i].isOccupied = occupied;
         slots[i].lastUpdate = millis();
         drawSlot(i);
-        Serial.print("✓ Updated slot ");
+        Serial.print("[SLOT] Updated slot ");
         Serial.print(slotId);
         Serial.print(": ");
         Serial.println(occupied ? "OCCUPIED" : "EMPTY");
@@ -226,7 +224,7 @@ void updateSlot(String slotId, bool occupied) {
       return;
     }
   }
-  Serial.print(" Slot not found: ");
+  Serial.print("[SLOT] Slot not found: ");
   Serial.println(slotId);
 }
 
@@ -253,14 +251,14 @@ void drawHeader(String title, String status) {
   tft.setCursor(10, 8);
   tft.print(title);
   
-  // Status (right side)
+  // Status
   tft.setTextSize(1);
-  // TFT_eSPI: tính width = length * 6 * textSize (cho font GLCD)
+
+  // TFT_eSPI
   int statusWidth = status.length() * 6 * 1;
   tft.setCursor(320 - statusWidth - 10, 10);
   tft.print(status);
   
-  // Connection indicators
   // WiFi icon
   if (wifiConnected) {
     tft.fillCircle(300, 20, 3, TFT_GREEN);
@@ -294,7 +292,7 @@ void drawSlot(int index) {
   tft.setTextColor(COLOR_TEXT);
   tft.setTextSize(2);
   
-  // TFT_eSPI: tính width = length * 6 * textSize
+  // TFT_eSPI
   int textWidth = s.id.length() * 6 * 2;
   int textHeight = 8 * 2;  // Chiều cao font * textSize
   
