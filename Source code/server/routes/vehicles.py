@@ -1,6 +1,3 @@
-"""
-Vehicles API Routes
-"""
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
@@ -10,7 +7,7 @@ router = APIRouter(prefix="/api")
 
 @router.get("/vehicles")
 async def get_vehicles(limit: int = 50, db: Session = Depends(get_db)):
-    """API lấy danh sách xe"""
+    # API lấy danh sách xe
     try:
         vehicles = db.query(VehicleLog).order_by(VehicleLog.timestamp.desc()).limit(limit).all()
         return {

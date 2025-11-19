@@ -1,6 +1,3 @@
-"""
-Slots API Routes
-"""
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
@@ -12,7 +9,7 @@ router = APIRouter(prefix="/api")
 
 @router.get("/slots")
 async def get_slots(db: Session = Depends(get_db)):
-    """API lấy danh sách slots"""
+    # API lấy danh sách slots
     try:
         slots = db.query(ParkingSlot).all()
         return {
@@ -40,10 +37,7 @@ async def update_slot(
     is_occupied: bool,
     db: Session = Depends(get_db)
 ):
-    """
-    API cập nhật trạng thái slot
-    Có thể dùng thay thế MQTT nếu cần
-    """
+    # API cập nhật trạng thái slot (không sử dụng vì đang dùng MQTT)
     try:
         slot = db.query(ParkingSlot).filter(ParkingSlot.slot_number == slot_number).first()
         

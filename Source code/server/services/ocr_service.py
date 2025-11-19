@@ -27,14 +27,14 @@ class OCRService:
             
             if response.status_code == 200 or response.status_code == 201:
                 result = response.json()
-                print(f"[OCR] ✓ Success: {result}")
+                print(f"[OCR] SUCCESS: {result}")
                 return self._parse_result(result)
             else:
-                print(f"[OCR] ✗ Error {response.status_code}: {response.text}")
+                print(f"[OCR] ERROR {response.status_code}: {response.text}")
                 return None
         
         except Exception as e:
-            print(f"[OCR] ✗ Exception: {e}")
+            print(f"[OCR] Exception: {e}")
             return None
     
     def _parse_result(self, result):

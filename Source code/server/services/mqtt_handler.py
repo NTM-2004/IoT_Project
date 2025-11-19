@@ -13,18 +13,18 @@ class MQTTHandler:
         self.client.on_message = self._on_message
         self.client.on_disconnect = self._on_disconnect
         
-        # Credentials nếu có
+        # Credentials (nếu có)
         if settings.MQTT_USERNAME:
             self.client.username_pw_set(settings.MQTT_USERNAME, settings.MQTT_PASSWORD)
     
     def _on_connect(self, client, userdata, flags, rc):
         if rc == 0:
-            print(f"✓ Connected to MQTT broker: {settings.MQTT_BROKER}")
+            print(f"[MQTT] SUCCESS Connected to MQTT broker: {settings.MQTT_BROKER}")
             # Subscribe vào topic slots
             client.subscribe(settings.MQTT_TOPIC_SLOTS)
-            print(f"✓ Subscribed to topic: {settings.MQTT_TOPIC_SLOTS}")
+            print(f"[MQTT] Subscribed to topic: {settings.MQTT_TOPIC_SLOTS}")
         else:
-            print(f"✗ Failed to connect to MQTT broker, code: {rc}")
+            print(f"[MQTT] Failed to connect to MQTT broker, code: {rc}")
     
     def _on_message(self, client, userdata, msg):
         try:
@@ -49,28 +49,32 @@ class MQTTHandler:
             print(f"[MQTT] Error processing message: {e}")
     
     def _on_disconnect(self, client, userdata, rc):
-        """Callback khi mất kết nối"""
+        
+        # Callback khi mất kết nối
         if rc != 0:
-            print(f"[MQTT] Unexpected disconnection. Reconnecting...")
+            print(f"[MQTT] ERROR Unexpected disconnection. Reconnecting...")
     
     def connect(self):
-        """Kết nối đến MQTT broker"""
+        
+        # Kết nối đến MQTT broker
         try:
             self.client.connect(settings.MQTT_BROKER, settings.MQTT_PORT, 60)
             self.client.loop_start()
             return True
         except Exception as e:
-            print(f"✗ Error connecting to MQTT broker: {e}")
+            print(f"[MQTT] Error connecting to MQTT broker: {e}")
             return False
     
     def disconnect(self):
-        """Ngắt kết nối"""
+        
+        # Ngắt kết nối
         self.client.loop_stop()
         self.client.disconnect()
         print("✓ Disconnected from MQTT broker")
     
     def publish(self, topic, message):
-        """Publish message"""
+        
+        # Publish message
         try:
             result = self.client.publish(topic, json.dumps(message))
             if result.rc == mqtt.MQTT_ERR_SUCCESS:

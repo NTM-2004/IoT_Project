@@ -1,6 +1,3 @@
-"""
-Upload Image API Route
-"""
 from fastapi import APIRouter, File, UploadFile, Depends
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
@@ -11,16 +8,15 @@ import shutil
 
 from config import settings
 from models import get_db, VehicleLog
-from ocr_service import ocr_service
+from services.ocr_service import ocr_service
 from services import websocket_service, gate_service
 
 router = APIRouter(prefix="/api")
 
 @router.get("/test-upload")
 async def test_upload():
-    """
-    Test endpoint để verify server đang chạy
-    """
+    
+    # Test endpoint để verify server đang chạy
     print("\n[TEST] /api/test-upload called")
     return {
         "status": "OK",
@@ -30,12 +26,10 @@ async def test_upload():
 
 @router.post("/upload-image")
 async def upload_image(file: UploadFile = File(...), db: Session = Depends(get_db)):
-    """
-    API nhận ảnh từ ESP32-CAM
-    ESP32 gửi POST request với multipart/form-data
-    """
+    
+    # ESP32 gửi POST request với multipart/form-data
     print(f"\n{'='*50}")
-    print(f"[UPLOAD] ⬇️  NEW REQUEST RECEIVED")
+    print(f"[UPLOAD] NEW REQUEST RECEIVED")
     print(f"[UPLOAD] Filename: {file.filename}")
     print(f"[UPLOAD] Content-Type: {file.content_type}")
     
@@ -43,7 +37,7 @@ async def upload_image(file: UploadFile = File(...), db: Session = Depends(get_d
         # Đọc nội dung ảnh
         image_bytes = await file.read()
         image_size = len(image_bytes)
-        print(f"[UPLOAD] ✅ Image read successfully")
+        print(f"[UPLOAD] Image read successfully")
         print(f"[UPLOAD] Size: {image_size} bytes ({image_size/1024:.2f} KB)")
         
         # Check magic bytes (JPEG starts with FF D8 FF)
@@ -53,7 +47,7 @@ async def upload_image(file: UploadFile = File(...), db: Session = Depends(get_d
         
         # Kiểm tra kích thước
         if image_size < 1000:
-            print("[UPLOAD] ❌ Image too small!")
+            print("[UPLOAD] Image too small")
             return JSONResponse(
                 status_code=400,
                 content={
@@ -69,7 +63,7 @@ async def upload_image(file: UploadFile = File(...), db: Session = Depends(get_d
         temp_filename = f"temp_{timestamp}.jpg"
         temp_path = os.path.join(settings.TEMP_DIR, temp_filename)
         
-        print(f"[UPLOAD] 💾 Saving to: {temp_path}")
+        print(f"[UPLOAD] Saving to: {temp_path}")
         
         with open(temp_path, 'wb') as f:
             bytes_written = f.write(image_bytes)
@@ -77,13 +71,13 @@ async def upload_image(file: UploadFile = File(...), db: Session = Depends(get_d
         # Verify file was written
         if os.path.exists(temp_path):
             actual_size = os.path.getsize(temp_path)
-            print(f"[UPLOAD] ✅ File saved successfully")
+            print(f"[UPLOAD] File saved successfully")
             print(f"[UPLOAD] Expected: {image_size} bytes, Written: {bytes_written} bytes, Disk: {actual_size} bytes")
             
             if actual_size != image_size:
-                print(f"[UPLOAD] ⚠️  WARNING: Size mismatch!")
+                print(f"[UPLOAD] WARNING: Size mismatch!")
         else:
-            print(f"[UPLOAD] ❌ ERROR: File not found after write!")
+            print(f"[UPLOAD] ERROR: File not found after write!")
             raise Exception("Failed to save temp file")
         
         # Gọi OCR API
@@ -94,7 +88,7 @@ async def upload_image(file: UploadFile = File(...), db: Session = Depends(get_d
             plate = result.get('plate', 'UNKNOWN')
             confidence = result.get('confidence', 0)
             
-            print(f"[OCR] ✅ Plate: {plate} (confidence: {confidence:.2f})")
+            print(f"[OCR] Success Plate: {plate} (confidence: {confidence:.2f})")
             
             # Lưu vào ARCHIVE nếu đạt ngưỡng
             if plate != 'UNKNOWN' and confidence > 0.5:
@@ -102,21 +96,21 @@ async def upload_image(file: UploadFile = File(...), db: Session = Depends(get_d
                 archive_path = os.path.join(settings.ARCHIVE_DIR, archive_filename)
                 
                 shutil.move(temp_path, archive_path)
-                print(f"[ARCHIVE] ✅ Moved to archive: {archive_path}")
+                print(f"[ARCHIVE] Moved to archive: {archive_path}")
                 
                 final_path = archive_path
             else:
                 # Low confidence - xóa ảnh temp
-                print("[ARCHIVE] ⚠ Low confidence - deleting temp file")
+                print("[ARCHIVE] Low confidence")
                 try:
                     os.remove(temp_path)
-                    print("[CLEANUP] ✅ Temp file deleted")
+                    print("[CLEANUP] Temp file deleted")
                 except Exception as e:
-                    print(f"[CLEANUP] ⚠ Cannot delete temp: {e}")
+                    print(f"[CLEANUP] Cannot delete temp: {e}")
                 
                 final_path = None
             
-            # Lưu vào database chỉ khi thành công
+            # Lưu vào database khi thành công
             if final_path:
                 try:
                     log = VehicleLog(
@@ -129,11 +123,11 @@ async def upload_image(file: UploadFile = File(...), db: Session = Depends(get_d
                     db.add(log)
                     db.commit()
                     db.refresh(log)
-                    print(f"[DATABASE] ✅ Saved (ID: {log.id})")
+                    print(f"[DATABASE] SUCCESS Saved (ID: {log.id})")
                 except Exception as db_error:
-                    print(f"[DATABASE] ⚠ Error: {db_error}")
+                    print(f"[DATABASE] Error: {db_error}")
             else:
-                print("[DATABASE] ⚠ Skipped - low confidence result not saved")
+                print("[DATABASE] Skipped - low confidence")
             
             # Broadcast WebSocket
             await websocket_service.broadcast({
@@ -149,7 +143,7 @@ async def upload_image(file: UploadFile = File(...), db: Session = Depends(get_d
                 gate_action = gate_result.get('action', 'none')
             else:
                 gate_action = "none"
-                print("[GATE] ⚠ Gate service not available")
+                print("[GATE] ERROR Gate service not available")
             
             print(f"{'='*50}\n")
             
@@ -166,14 +160,14 @@ async def upload_image(file: UploadFile = File(...), db: Session = Depends(get_d
                 }
             )
         else:
-            print("[OCR] ❌ Failed")
+            print("[OCR] Failed")
             
             # Xóa temp file
             try:
                 os.remove(temp_path)
-                print("[CLEANUP] ✅ Temp file deleted (OCR failed)")
+                print("[CLEANUP] Temp file deleted (OCR failed)")
             except Exception as e:
-                print(f"[CLEANUP] ⚠ Cannot delete temp: {e}")
+                print(f"[CLEANUP] Cannot delete temp: {e}")
             
             # Gửi lệnh reject cho GATE
             if gate_service:
@@ -192,7 +186,7 @@ async def upload_image(file: UploadFile = File(...), db: Session = Depends(get_d
             )
     
     except Exception as e:
-        print(f"[ERROR] ❌ {str(e)}")
+        print(f"[ERROR] {str(e)}")
         print(f"{'='*50}\n")
         
         # Gửi lệnh reject cho GATE

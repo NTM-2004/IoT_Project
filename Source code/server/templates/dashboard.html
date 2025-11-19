@@ -13,7 +13,7 @@
         
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: #ffffff;
             min-height: 100vh;
             padding: 20px;
         }
@@ -24,11 +24,9 @@
         }
         
         h1 {
-            color: white;
             text-align: center;
             margin-bottom: 30px;
             font-size: 2.5em;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
         }
         
         .dashboard {
@@ -160,7 +158,7 @@
         }
         
         .stat-card {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: #667eea;
             color: white;
             padding: 20px;
             border-radius: 10px;
@@ -191,7 +189,7 @@
 </head>
 <body>
     <div class="container">
-        <h1>🚗 IoT Parking System Dashboard</h1>
+        <h1>Parking System Dashboard</h1>
         
         <div class="stats">
             <div class="stat-card">
@@ -332,7 +330,7 @@
         
         function updateStats() {
             const slots = document.querySelectorAll('.slot');
-            const total = 8; // Fixed 8 slots
+            const total = 8; // 8 slots
             const occupied = document.querySelectorAll('.slot.occupied').length;
             const free = total - occupied;
             
@@ -341,7 +339,6 @@
             document.getElementById('free-slots').textContent = free;
         }
         
-        // Connect on load
         connectWebSocket();
     </script>
 </body>

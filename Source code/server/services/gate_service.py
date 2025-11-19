@@ -1,7 +1,3 @@
-"""
-Gate Service
-Xử lý logic điều khiển cổng
-"""
 from typing import Dict, Any
 from datetime import datetime
 
@@ -10,12 +6,10 @@ class GateService:
         self.mqtt_handler = mqtt_handler
     
     def send_open_command(self, plate: str, confidence: float) -> bool:
-        """
-        Gửi lệnh mở cổng qua MQTT
-        Returns: True nếu gửi thành công
-        """
+        
+        # Gửi lệnh mở cổng qua MQTT
         if not self.mqtt_handler:
-            print("[GATE] ⚠ MQTT handler not available")
+            print("[GATE] ERROR MQTT handler not available")
             return False
         
         message = {
@@ -28,19 +22,17 @@ class GateService:
         success = self.mqtt_handler.publish("iot/parking/gate/control", message)
         
         if success:
-            print(f"[GATE] ✅ OPEN command sent - Plate: {plate} (confidence: {confidence:.2f})")
+            print(f"[GATE] SUCCESS OPEN command sent - Plate: {plate} (confidence: {confidence:.2f})")
         else:
-            print(f"[GATE] ✗ Failed to send OPEN command")
+            print(f"[GATE] Failed to send OPEN command")
         
         return success
     
     def send_reject_command(self, reason: str = "OCR failed") -> bool:
-        """
-        Gửi lệnh từ chối (giữ cổng đóng) qua MQTT
-        Returns: True nếu gửi thành công
-        """
+        
+        # Gửi lệnh từ chối (giữ cổng đóng) qua MQTT
         if not self.mqtt_handler:
-            print("[GATE] ⚠ MQTT handler not available")
+            print("[GATE] ERROR MQTT handler not available")
             return False
         
         message = {
@@ -52,9 +44,9 @@ class GateService:
         success = self.mqtt_handler.publish("iot/parking/gate/control", message)
         
         if success:
-            print(f"[GATE] ✅ REJECT command sent - Reason: {reason}")
+            print(f"[GATE] REJECT command sent - Reason: {reason}")
         else:
-            print(f"[GATE] ✗ Failed to send REJECT command")
+            print(f"[GATE] Failed to send REJECT command")
         
         return success
     
@@ -74,15 +66,12 @@ class GateService:
         
         if confidence < threshold:
             return False
-        
-        # TODO: Thêm logic kiểm tra whitelist/blacklist ở đây
-        
+              
         return True
     
     def process_ocr_result(self, plate: str, confidence: float) -> Dict[str, Any]:
         """
         Xử lý kết quả OCR và gửi lệnh điều khiển cổng
-        
         Returns: Dict chứa action và status
         """
         should_open = self.should_open_gate(plate, confidence)
@@ -105,5 +94,5 @@ class GateService:
                 "confidence": confidence
             }
 
-# Singleton instance sẽ được khởi tạo trong main.py
+# Singleton instance 
 gate_service = None

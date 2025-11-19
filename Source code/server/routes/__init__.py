@@ -1,6 +1,3 @@
-"""
-Routes package
-"""
 from . import dashboard
 from . import slots
 from . import vehicles
