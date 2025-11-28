@@ -1,0 +1,31 @@
+# FastAPI và ASGI server
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+python-multipart==0.0.6
+
+# MQTT Client
+paho-mqtt==1.6.1
+
+# Serial Communication
+pyserial==3.5
+
+# HTTP Client cho OCR API
+httpx==0.25.1
+requests==2.31.0
+
+# Database (MySQL)
+sqlalchemy==2.0.36
+pymysql==1.1.1
+cryptography==43.0.3
+
+# Template engine
+jinja2==3.1.2
+
+# Environment variables
+python-dotenv==1.0.0
+
+# Image processing
+Pillow
+
+# Async support
+aiofiles==23.2.1
