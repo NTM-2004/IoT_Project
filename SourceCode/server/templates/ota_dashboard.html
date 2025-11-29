@@ -322,7 +322,7 @@
 
             async function loadFirmwareList() {
                 try {
-                    const response = await fetch('/api/firmware/list');
+                    const response = await fetch('/ota/api/firmware/list');
                     const data = await response.json();
 
                     const listDiv = document.getElementById('firmware-list-content');
@@ -382,7 +382,7 @@
                 try {
                     showStatus(statusDiv, 'info', 'Đang upload...');
 
-                    const response = await fetch('/api/firmware/upload', {
+                    const response = await fetch('/ota/api/firmware/upload', {
                         method: 'POST',
                         body: formData
                     });
@@ -429,7 +429,7 @@
                     loadingDiv.style.display = 'block';
                     statusDiv.style.display = 'none';
 
-                    const response = await fetch('/api/ota/trigger', {
+                    const response = await fetch('/ota/api/trigger', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json'

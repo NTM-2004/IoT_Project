@@ -8,6 +8,7 @@ from fastapi.templating import Jinja2Templates
 import paho.mqtt.client as mqtt
 import os
 import json
+import hashlib
 from datetime import datetime
 from config import settings
 from typing import Optional
@@ -93,6 +94,15 @@ def shutdown_mqtt():
         mqtt_client.disconnect()
         print("[OTA MQTT] Shutdown complete")
 
+def calculate_md5(file_path):
+    """Calculate MD5 hash of a file"""
+    md5_hash = hashlib.md5()
+    with open(file_path, "rb") as f:
+        # Read file in chunks to handle large files
+        for chunk in iter(lambda: f.read(4096), b""):
+            md5_hash.update(chunk)
+    return md5_hash.hexdigest()
+
 # ==================== OTA ROUTES ====================
 
 @router.get("/", response_class=HTMLResponse)
@@ -129,11 +139,13 @@ async def list_firmware(session_id: Optional[str] = Cookie(None)):
         if filename.endswith('.bin'):
             filepath = os.path.join(settings.FIRMWARE_DIR, filename)
             stat = os.stat(filepath)
+            md5_hash = calculate_md5(filepath)
             firmware_files.append({
                 "filename": filename,
                 "size": stat.st_size,
                 "size_kb": round(stat.st_size / 1024, 2),
-                "modified": datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M:%S")
+                "modified": datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M:%S"),
+                "md5": md5_hash
             })
     
     return {
@@ -168,13 +180,18 @@ async def upload_firmware(file: UploadFile = File(...), session_id: Optional[str
         
         file_size = len(content)
         
+        # Calculate MD5 hash
+        md5_hash = calculate_md5(file_path)
+        
         print(f"[OTA FIRMWARE] Uploaded: {file.filename} ({file_size} bytes)")
+        print(f"[OTA FIRMWARE] MD5: {md5_hash}")
         
         return {
             "success": True,
             "filename": file.filename,
             "size": file_size,
             "size_kb": round(file_size / 1024, 2),
+            "md5": md5_hash,
             "path": file_path
         }
     
@@ -234,16 +251,30 @@ async def trigger_ota_update(request: Request, session_id: Optional[str] = Cooki
         # Get firmware info
         file_size = os.path.getsize(firmware_path)
         
+        # Calculate MD5 hash
+        md5_hash = calculate_md5(firmware_path)
+        print(f"[OTA] Firmware MD5: {md5_hash}")
+        
+        # Get download host (IP that ESP32 can reach)
+        print(f"[OTA DEBUG] settings.MQTT_BROKER = {settings.MQTT_BROKER}")
+        print(f"[OTA DEBUG] settings.OTA_DOWNLOAD_HOST = {settings.OTA_DOWNLOAD_HOST}")
+        download_host = settings.get_ota_download_host
+        print(f"[OTA] Download host: {download_host}")
+        print(f"[OTA] Full URL will be: http://{download_host}:{settings.SERVER_PORT}/ota/firmware/{firmware_file}")
+        
         # Create OTA message
         # ESP32 will download firmware from HTTP server
         ota_message = {
             "command": "update",
-            "firmware_url": f"http://{settings.MQTT_BROKER}:{settings.SERVER_PORT}/ota/firmware/{firmware_file}",
+            "firmware_url": f"http://{download_host}:{settings.SERVER_PORT}/ota/firmware/{firmware_file}",
             "firmware_file": firmware_file,
             "firmware_size": file_size,
+            "md5": md5_hash,
             "version": datetime.now().strftime("%Y%m%d_%H%M%S"),
             "timestamp": datetime.now().isoformat()
         }
+        
+        print(f"[OTA DEBUG] ota_message = {json.dumps(ota_message, indent=2)}")
         
         # Send MQTT message
         if mqtt_client:

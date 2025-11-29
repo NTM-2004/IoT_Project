@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, create_engine
+from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text, create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime
@@ -50,6 +50,22 @@ class Admin(Base):
     def verify_password(self, password: str) -> bool:
         """Verify password against hash"""
         return self.password_hash == self.hash_password(password)
+
+class AdminActionLog(Base):
+    """Model cho log các thao tác của admin"""
+    __tablename__ = "admin_action_logs"
+    
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    admin_id = Column(Integer, nullable=False)  # ID của admin thực hiện
+    admin_username = Column(String(50), nullable=False)  # Username để dễ query
+    action_type = Column(String(50), nullable=False)  # Loại hành động: 'open_gate_manual', 'create_admin', etc.
+    action_detail = Column(Text)  # Chi tiết thêm (JSON string hoặc text)
+    ip_address = Column(String(50))  # IP của admin
+    timestamp = Column(DateTime, default=datetime.utcnow, nullable=False)
+    success = Column(Boolean, default=True)  # Thành công hay thất bại
+    
+    def __repr__(self):
+        return f"<AdminActionLog {self.admin_username} - {self.action_type} at {self.timestamp}>"
 
 # Tạo engine và session
 engine = create_engine(

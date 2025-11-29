@@ -2,7 +2,7 @@ from fastapi import APIRouter, Request, Depends, Form, Response, Cookie
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
-from models import get_db, ParkingSlot, VehicleLog, Admin
+from models import get_db, ParkingSlot, VehicleLog, Admin, AdminActionLog
 from config import settings
 from datetime import datetime
 from typing import Optional
@@ -12,6 +12,45 @@ from session_manager import create_session, verify_session, verify_super_admin, 
 
 router = APIRouter()
 templates = Jinja2Templates(directory="templates")
+
+def log_admin_action(db: Session, session_id: str, action_type: str, 
+                     action_detail: str = None, request: Request = None, success: bool = True):
+    """Log admin action to database"""
+    try:
+        session_data = get_session(session_id)
+        if not session_data:
+            return
+        
+        admin_username = session_data.get("username", "unknown")
+        
+        # Get admin ID from database
+        admin = db.query(Admin).filter(Admin.username == admin_username).first()
+        if not admin:
+            return
+        
+        # Get IP address from request
+        ip_address = None
+        if request:
+            ip_address = request.client.host if request.client else None
+        
+        # Create log entry
+        log_entry = AdminActionLog(
+            admin_id=admin.id,
+            admin_username=admin_username,
+            action_type=action_type,
+            action_detail=action_detail,
+            ip_address=ip_address,
+            timestamp=datetime.now(),
+            success=success
+        )
+        
+        db.add(log_entry)
+        db.commit()
+        print(f"[ADMIN LOG] {admin_username} - {action_type} - {'Success' if success else 'Failed'}")
+        
+    except Exception as e:
+        print(f"[ADMIN LOG] Error logging action: {e}")
+        db.rollback()
 
 # ==================== PUBLIC ENDPOINTS ====================
 
@@ -169,7 +208,7 @@ async def admin_dashboard(
         )
 
 @router.post("/api/admin/manual-gate")
-async def manual_gate_open(session_id: Optional[str] = Cookie(None)):
+async def manual_gate_open(request: Request, session_id: Optional[str] = Cookie(None), db: Session = Depends(get_db)):
     """API endpoint to manually open gate (admin only)"""
     # Check authentication
     if not verify_session(session_id):
@@ -184,6 +223,16 @@ async def manual_gate_open(session_id: Optional[str] = Cookie(None)):
         
         # Trigger manual gate open
         success = gate_service.trigger_manual_gate()
+        
+        # Log admin action
+        log_admin_action(
+            db=db,
+            session_id=session_id,
+            action_type="open_gate_manual",
+            action_detail="Admin manually opened gate from dashboard",
+            request=request,
+            success=success
+        )
         
         if success:
             return JSONResponse(
