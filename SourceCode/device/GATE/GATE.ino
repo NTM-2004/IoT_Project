@@ -189,6 +189,16 @@ void setup() {
 }
 
 void loop() {
+  // Kiểm tra kết nối WiFi
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("\n[WIFI] ERROR WiFi disconnected! Reconnecting");
+    setRGB_Red();  // Đỏ khi mất WiFi
+    connectWiFi();
+    if (WiFi.status() == WL_CONNECTED) {
+      setRGB_Green();  // Xanh lá khi kết nối lại thành công
+    }
+  }
+  
   // Duy trì kết nối MQTT
   if (!mqtt.connected()) {
     connectMQTT();
@@ -281,9 +291,12 @@ void connectMQTT() {
   while (!mqtt.connected()) {
     Serial.print("[MQTT] Connecting to MQTT");
     
-    String clientId = "ESP32_GATE_" + String(random(0xffff), HEX);
+    String mac = WiFi.macAddress();
+    mac.replace(":", ""); 
+
+    String clientId = "ESP32_GATE_" + mac;
     
-    if (mqtt.connect(clientId.c_str())) {
+    if (mqtt.connect(clientId.c_str(), MQTT_USERNAME, MQTT_PASSWORD)) {
       Serial.println("[MQTT] SUCCESS Connected");
       
       // Subscribe vào topic điều khiển cổng

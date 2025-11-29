@@ -175,10 +175,12 @@ bool connectMQTT() {
   Serial.print("[MQTT] Connecting to MQTT broker");
   drawHeader("Parking Monitor", "Connecting MQTT");
   
-  String clientId = "ESP32_Monitor_";
-  clientId += String(random(0xffff), HEX);
+  String mac = WiFi.macAddress();
+    mac.replace(":", ""); 
+
+  String clientId = "ESP32_MONITOR_" + mac;
   
-  if (mqtt.connect(clientId.c_str())) {
+  if (mqtt.connect(clientId.c_str(), MQTT_USERNAME, MQTT_PASSWORD)) {
     mqttConnected = true;
     Serial.println("[MQTT] SUCCESS MQTT broker connected");
     

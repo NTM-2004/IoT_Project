@@ -81,15 +81,18 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
         if (command && strcmp(command, "update") == 0) {
             const char* firmwareUrl = doc["firmware_url"];
             int firmwareSize = doc["firmware_size"];
+            const char* md5Hash = doc["md5"];
             
             Serial.println("[OTA] Update command received!");
             Serial.print("[OTA] Firmware URL: ");
             Serial.println(firmwareUrl);
             Serial.print("[OTA] Size: ");
             Serial.println(firmwareSize);
+            Serial.print("[OTA] MD5: ");
+            Serial.println(md5Hash ? md5Hash : "Not provided");
             
             // Trigger OTA update
-            performOTAUpdate(firmwareUrl, firmwareSize);
+            performOTAUpdate(firmwareUrl, firmwareSize, md5Hash);
         }
     }
 }
@@ -102,13 +105,15 @@ void connectMQTT() {
         Serial.print(MQTT_PORT);
         Serial.print("...");
         
-        String clientId = "NODE_01_";
-        clientId += String(random(0xffff), HEX);
+        String mac = WiFi.macAddress();
+        mac.replace(":", ""); 
+
+        String clientId = "ESP32_NODE_" + mac;
         
         // Kết nối MQTT 
         bool connected = false;
        
-        connected = mqtt.connect(clientId.c_str());
+        connected = mqtt.connect(clientId.c_str(), MQTT_USERNAME, MQTT_PASSWORD);
         
         if (connected) {
             Serial.println(" Connected!");
@@ -202,7 +207,7 @@ void publishStatus() {
 }
 
 // OTA Update
-void performOTAUpdate(const char* url, int expectedSize) {
+void performOTAUpdate(const char* url, int expectedSize, const char* expectedMD5) {
     if (otaInProgress) {
         Serial.println("[OTA] Update already in progress");
         return;
@@ -216,6 +221,8 @@ void performOTAUpdate(const char* url, int expectedSize) {
     Serial.println(url);
     Serial.print("[OTA] Expected size: ");
     Serial.println(expectedSize);
+    Serial.print("[OTA] Expected MD5: ");
+    Serial.println(expectedMD5 ? expectedMD5 : "Not provided");
     
     // Kiểm tra partition space
     size_t updateSize = (expectedSize > 0) ? expectedSize : UPDATE_SIZE_UNKNOWN;
@@ -232,6 +239,12 @@ void performOTAUpdate(const char* url, int expectedSize) {
         Serial.println(contentLength);
         
         if (contentLength > 0) {
+            // Set expected MD5 if provided
+            if (expectedMD5 && strlen(expectedMD5) > 0) {
+                Update.setMD5(expectedMD5);
+                Serial.println("[OTA] MD5 verification enabled");
+            }
+            
             // Sử dụng contentLength
             if (!Update.begin(contentLength, U_FLASH)) {
                 Serial.println("[OTA] ERROR Not enough space for OTA!");
@@ -297,6 +310,30 @@ void performOTAUpdate(const char* url, int expectedSize) {
                 if (Update.end(true)) {
                     if (Update.isFinished()) {
                         Serial.println("[OTA] SUCCESS Update finished successfully");
+                        
+                        // Check MD5 if it was set
+                        if (expectedMD5 && strlen(expectedMD5) > 0) {
+                            if (Update.hasError()) {
+                                Serial.println("[OTA] ERROR MD5 verification failed");
+                                Serial.println("[OTA] Rolling back to previous firmware...");
+                                
+                                // Publish failure status
+                                StaticJsonDocument<128> statusDoc;
+                                statusDoc["status"] = "failed";
+                                statusDoc["message"] = "MD5 verification failed";
+                                
+                                char statusBuffer[128];
+                                serializeJson(statusDoc, statusBuffer);
+                                mqtt.publish("iot/parking/node/01/ota/status", statusBuffer);
+                                
+                                otaInProgress = false;
+                                digitalWrite(LED_OTA_PIN, LOW);
+                                return;
+                            } else {
+                                Serial.println("[OTA] SUCCESS MD5 verification passed!");
+                            }
+                        }
+                        
                         Serial.println("[OTA] Rebooting in 3 seconds");
                         
                         // Publish success status
@@ -320,7 +357,7 @@ void performOTAUpdate(const char* url, int expectedSize) {
                 }
             }
         } else {
-            Serial.println("[OTA] ERROR Invalid content length!");
+            Serial.println("[OTA] ERROR Invalid content length");
         }
     } else {
         Serial.print("[OTA] ERROR HTTP error: ");
@@ -350,7 +387,7 @@ void setup() {
     pinMode(LED_STATUS_PIN, OUTPUT);
     
     digitalWrite(LED_OTA_PIN, LOW);
-    digitalWrite(LED_STATUS_PIN, HIGH);  // LED status
+    digitalWrite(LED_STATUS_PIN, LOW);  // LED status
     
     Serial.println("[SENSOR] SUCCESS Sensors initialized");
     

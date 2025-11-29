@@ -17,8 +17,8 @@ const char* serverIP = "192.168.137.1";
 const int serverPort = 8000;
 const char* uploadEndpoint = "/api/upload-image";
 
-// MQTT Topics - Nhận trigger out
-#define TOPIC_TRIGGER_OUT  "iot/parking/trigger/out"
+// MQTT Topics - Nhận trigger in
+#define TOPIC_TRIGGER_IN   "iot/parking/trigger/in"
 // Publish metadata 
 #define TOPIC_CAM_STATUS   "iot/parking/cam/status"
 
@@ -55,7 +55,7 @@ void setup() {
   delay(500);  
   
   Serial.println("\n\n========================================");
-  Serial.println("ESP32-CAM-OUT");
+  Serial.println("ESP32-CAM-IN");
   Serial.println("========================================");
   
   // Khởi tạo Flash LED
@@ -176,18 +176,21 @@ void connectMQTT() {
   while (!mqtt.connected() && retries < maxRetries) {
     Serial.print("[MQTT] Connecting to MQTT...");
     
-    String clientId = "ESP32_CAM_" + String(random(0xffff), HEX);
+    String mac = WiFi.macAddress();
+    mac.replace(":", ""); 
+
+    String clientId = "ESP32_CAM_" + mac;
     
-    if (mqtt.connect(clientId.c_str())) {
+    // Kết nối MQTT với username và password
+    if (mqtt.connect(clientId.c_str(), MQTT_USERNAME, MQTT_PASSWORD)) {
       Serial.println("[MQTT] SUCCESS Connected");
       
-      // Subscribe CHỈ vào trigger OUT/EXIT
-      mqtt.subscribe(TOPIC_TRIGGER_OUT);
+      // Subscribe trigger in
+      mqtt.subscribe(TOPIC_TRIGGER_IN);
       
       Serial.println("[MQTT] Subscribed to:");
       Serial.print("  - ");
-      Serial.println(TOPIC_TRIGGER_OUT);
-      Serial.println("  (EXIT/OUT camera only)");
+      Serial.println(TOPIC_TRIGGER_IN);
       
       return;  
       
@@ -222,13 +225,14 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
   Serial.print("Message: ");
   Serial.println(message);
   
-  if (String(topic) == TOPIC_TRIGGER_OUT) {
-    currentDirection = "out";
-
+  if (String(topic) == TOPIC_TRIGGER_IN) {
+    currentDirection = "in";
+    Serial.println("Direction: ENTRANCE (CAM_IN)");
+    
     // Chụp và upload ảnh
     captureAndUpload();
   } else {
-    Serial.println("[MQTT] ERROR Ignoring non-EXIT trigger");
+    Serial.println("[MQTT] ERROR Ignoring non-ENTRANCE trigger");
   }
 }
 
