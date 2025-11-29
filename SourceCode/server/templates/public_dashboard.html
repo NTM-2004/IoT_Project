@@ -1,319 +1,311 @@
 <!DOCTYPE html>
 <html lang="vi">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Parking System - Public View</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 20px;
-        }
-        
-        .container {
-            max-width: 900px;
-            margin: 0 auto;
-        }
-        
-        .header {
-            text-align: center;
-            color: white;
-            margin-bottom: 30px;
-        }
-        
-        .header h1 {
-            font-size: 2.5em;
-            margin-bottom: 10px;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
-        }
-        
-        .header p {
-            font-size: 1.1em;
-            opacity: 0.9;
-        }
-        
-        .admin-link {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            background: white;
-            color: #667eea;
-            padding: 10px 20px;
-            border-radius: 10px;
-            text-decoration: none;
-            font-weight: bold;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
-            transition: transform 0.2s;
-        }
-        
-        .admin-link:hover {
-            transform: translateY(-2px);
-        }
-        
-        .stats {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 15px;
-            margin-bottom: 30px;
-        }
-        
-        .stat-card {
-            background: white;
-            padding: 25px;
-            border-radius: 15px;
-            text-align: center;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-        }
-        
-        .stat-value {
-            font-size: 3em;
-            font-weight: bold;
-            color: #667eea;
-            margin-bottom: 5px;
-        }
-        
-        .stat-label {
-            font-size: 1em;
-            color: #6b7280;
-        }
-        
-        .card {
-            background: white;
-            border-radius: 20px;
-            padding: 30px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-        }
-        
-        .card h2 {
-            color: #667eea;
-            margin-bottom: 25px;
-            font-size: 1.8em;
-            text-align: center;
-        }
-        
-        .slots-container {
-            max-width: 600px;
-            margin: 0 auto;
-        }
-        
-        .slot-row-label {
-            font-weight: bold;
-            color: #667eea;
-            margin-top: 20px;
-            margin-bottom: 15px;
-            font-size: 1.3em;
-            text-align: center;
-        }
-        
-        .slots-row {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 15px;
-            margin-bottom: 10px;
-        }
-        
-        .slot {
-            aspect-ratio: 1;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            border-radius: 15px;
-            font-weight: bold;
-            font-size: 1.5em;
-            transition: all 0.3s;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-        }
-        
-        .slot.free {
-            background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
-            color: white;
-        }
-        
-        .slot.occupied {
-            background: linear-gradient(135deg, #f87171 0%, #ef4444 100%);
-            color: white;
-        }
-        
-        .slot .status {
-            font-size: 0.4em;
-            margin-top: 5px;
-            opacity: 0.9;
-        }
-        
-        .status-indicator {
-            display: inline-block;
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            margin-left: 10px;
-        }
-        
-        .status-indicator.connected {
-            background: #4ade80;
-            animation: pulse 2s infinite;
-        }
-        
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
-        }
-        
-        .footer {
-            text-align: center;
-            color: white;
-            margin-top: 30px;
-            opacity: 0.8;
-        }
-        
-        @media (max-width: 768px) {
-            .stats {
-                grid-template-columns: 1fr;
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Parking System - Public View</title>
+        <style>
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
             }
-            
+
+            body {
+                font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+                background: #f5f5f5;
+                min-height: 100vh;
+                padding: 20px;
+            }
+
+            .container {
+                max-width: 900px;
+                margin: 0 auto;
+            }
+
+            .header {
+                text-align: center;
+                color: white;
+                margin-bottom: 30px;
+            }
+
             .header h1 {
-                font-size: 2em;
+                font-size: 2.5em;
+                margin-bottom: 10px;
+                text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
             }
-            
+
+            .header p {
+                font-size: 1.1em;
+                opacity: 0.9;
+            }
+
             .admin-link {
-                position: static;
-                display: block;
-                width: fit-content;
-                margin: 0 auto 20px;
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: white;
+                color: #667eea;
+                padding: 10px 20px;
+                border-radius: 10px;
+                text-decoration: none;
+                font-weight: bold;
+                box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+                transition: transform 0.2s;
             }
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>🅿️ Parking System</h1>
-            <p>Real-time parking availability
-                <span class="status-indicator connected" id="ws-status"></span>
-            </p>
-        </div>
-        
-        <div class="stats">
-            <div class="stat-card">
-                <div class="stat-value" id="total-slots">8</div>
-                <div class="stat-label">Total Slots</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value" id="free-slots">8</div>
-                <div class="stat-label">Available</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value" id="occupied-slots">0</div>
-                <div class="stat-label">Occupied</div>
-            </div>
-        </div>
-        
-        <div class="card">
-            <h2>Parking Slots Status</h2>
-            <div class="slots-container">
-                <!-- Row A -->
-                <div class="slot-row-label">Row A</div>
-                <div class="slots-row">
-                    {% set slot_names_a = ['A1', 'A2', 'A3', 'A4'] %}
-                    {% for slot_name in slot_names_a %}
-                        {% set slot_data = slots|selectattr('slot_number', 'equalto', slot_name)|first %}
-                        <div class="slot {% if slot_data and slot_data.is_occupied %}occupied{% else %}free{% endif %}" 
-                             data-slot="{{ slot_name }}">
-                            <div>{{ slot_name }}</div>
-                            <div class="status">
-                                {% if slot_data and slot_data.is_occupied %}Occupied{% else %}Free{% endif %}
-                            </div>
-                        </div>
-                    {% endfor %}
-                </div>
-                
-                <!-- Row B -->
-                <div class="slot-row-label">Row B</div>
-                <div class="slots-row">
-                    {% set slot_names_b = ['B1', 'B2', 'B3', 'B4'] %}
-                    {% for slot_name in slot_names_b %}
-                        {% set slot_data = slots|selectattr('slot_number', 'equalto', slot_name)|first %}
-                        <div class="slot {% if slot_data and slot_data.is_occupied %}occupied{% else %}free{% endif %}" 
-                             data-slot="{{ slot_name }}">
-                            <div>{{ slot_name }}</div>
-                            <div class="status">
-                                {% if slot_data and slot_data.is_occupied %}Occupied{% else %}Free{% endif %}
-                            </div>
-                        </div>
-                    {% endfor %}
-                </div>
-            </div>
-        </div>
-        
-        <div class="footer">
-            <p>IoT Parking System © 2025</p>
-        </div>
-    </div>
-    
-    <script>
-        // WebSocket connection for real-time updates
-        let ws;
-        const wsStatus = document.getElementById('ws-status');
-        
-        function connectWebSocket() {
-            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
-            
-            ws.onopen = () => {
-                console.log('WebSocket connected');
-                wsStatus.classList.add('connected');
-            };
-            
-            ws.onclose = () => {
-                console.log('WebSocket disconnected');
-                wsStatus.classList.remove('connected');
-                setTimeout(connectWebSocket, 3000);
-            };
-            
-            ws.onmessage = (event) => {
-                const data = JSON.parse(event.data);
-                console.log('WebSocket message:', data);
-                
-                if (data.type === 'slot_update') {
-                    updateSlot(data.slot, data.occupied);
-                }
-            };
-        }
-        
-        function updateSlot(slotNumber, isOccupied) {
-            const slotElement = document.querySelector(`[data-slot="${slotNumber}"]`);
-            if (slotElement) {
-                slotElement.classList.remove('free', 'occupied');
-                slotElement.classList.add(isOccupied ? 'occupied' : 'free');
-                
-                const statusText = slotElement.querySelector('.status');
-                if (statusText) {
-                    statusText.textContent = isOccupied ? 'Occupied' : 'Free';
-                }
-                
-                updateStats();
+
+            .admin-link:hover {
+                transform: translateY(-2px);
             }
-        }
-        
-        function updateStats() {
-            const total = 8;
-            const occupied = document.querySelectorAll('.slot.occupied').length;
-            const free = total - occupied;
-            
-            document.getElementById('total-slots').textContent = total;
-            document.getElementById('free-slots').textContent = free;
-            document.getElementById('occupied-slots').textContent = occupied;
-        }
-        
-        connectWebSocket();
-    </script>
-</body>
+
+            .stats {
+                display: grid;
+                grid-template-columns: repeat(3, 1fr);
+                gap: 15px;
+                margin-bottom: 30px;
+            }
+
+            .stat-card {
+                background: white;
+                padding: 25px;
+                border-radius: 15px;
+                text-align: center;
+                box-shadow: 0 5px 10px rgba(0, 0, 0, 0.2);
+            }
+
+            .stat-value {
+                font-size: 3em;
+                font-weight: bold;
+                color: #667eea;
+                margin-bottom: 5px;
+            }
+
+            .stat-label {
+                font-size: 1em;
+                color: #6b7280;
+            }
+
+            .card {
+                background: white;
+                border-radius: 20px;
+                padding: 30px;
+                box-shadow: 0 5px 10px rgba(0, 0, 0, 0.3);
+            }
+
+            .card h2 {
+                color: #667eea;
+                margin-bottom: 25px;
+                font-size: 1.8em;
+                text-align: center;
+            }
+
+            .slots-container {
+                max-width: 600px;
+                margin: 0 auto;
+            }
+
+            .slot-row-label {
+                font-weight: bold;
+                color: #667eea;
+                margin-top: 20px;
+                margin-bottom: 15px;
+                font-size: 1.3em;
+                text-align: center;
+            }
+
+            .slots-row {
+                display: grid;
+                grid-template-columns: repeat(4, 1fr);
+                gap: 15px;
+                margin-bottom: 10px;
+            }
+
+            .slot {
+                aspect-ratio: 1;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                border-radius: 15px;
+                font-weight: bold;
+                font-size: 1.5em;
+                transition: all 0.3s;
+                box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            }
+
+            .slot.free {
+                background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
+                color: white;
+            }
+
+            .slot.occupied {
+                background: linear-gradient(135deg, #f87171 0%, #ef4444 100%);
+                color: white;
+            }
+
+            .slot .status {
+                font-size: 0.4em;
+                margin-top: 5px;
+                opacity: 0.9;
+            }
+
+            .status-indicator {
+                display: inline-block;
+                width: 10px;
+                height: 10px;
+                border-radius: 50%;
+                margin-left: 10px;
+            }
+
+            .status-indicator.connected {
+                background: #4ade80;
+                animation: pulse 2s infinite;
+            }
+
+            @keyframes pulse {
+                0%,
+                100% {
+                    opacity: 1;
+                }
+                50% {
+                    opacity: 0.5;
+                }
+            }
+
+            .footer {
+                text-align: center;
+                color: white;
+                margin-top: 30px;
+                opacity: 0.8;
+            }
+
+            @media (max-width: 768px) {
+                .stats {
+                    grid-template-columns: 1fr;
+                }
+
+                .header h1 {
+                    font-size: 2em;
+                }
+
+                .admin-link {
+                    position: static;
+                    display: block;
+                    width: fit-content;
+                    margin: 0 auto 20px;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1 style="color: #667eea; padding-top: 15px">Smart Parking System</h1>
+            </div>
+
+            <div class="stats">
+                <div class="stat-card">
+                    <div class="stat-value" id="total-slots">8</div>
+                    <div class="stat-label">Total Slots</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="free-slots">8</div>
+                    <div class="stat-label">Available</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="occupied-slots">0</div>
+                    <div class="stat-label">Occupied</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>Parking Slots Status</h2>
+                <div class="slots-container">
+                    <!-- Row A -->
+                    <div class="slot-row-label">Row A</div>
+                    <div class="slots-row">
+                        {% set slot_names_a = ['A1', 'A2', 'A3', 'A4'] %} {% for slot_name in slot_names_a %} {% set slot_data = slots|selectattr('slot_number', 'equalto', slot_name)|first %}
+                        <div class="slot {% if slot_data and slot_data.is_occupied %}occupied{% else %}free{% endif %}" data-slot="{{ slot_name }}">
+                            <div>{{ slot_name }}</div>
+                            <div class="status">{% if slot_data and slot_data.is_occupied %}Occupied{% else %}Free{% endif %}</div>
+                        </div>
+                        {% endfor %}
+                    </div>
+
+                    <!-- Row B -->
+                    <div class="slot-row-label">Row B</div>
+                    <div class="slots-row">
+                        {% set slot_names_b = ['B1', 'B2', 'B3', 'B4'] %} {% for slot_name in slot_names_b %} {% set slot_data = slots|selectattr('slot_number', 'equalto', slot_name)|first %}
+                        <div class="slot {% if slot_data and slot_data.is_occupied %}occupied{% else %}free{% endif %}" data-slot="{{ slot_name }}">
+                            <div>{{ slot_name }}</div>
+                            <div class="status">{% if slot_data and slot_data.is_occupied %}Occupied{% else %}Free{% endif %}</div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="footer">
+                <p>IoT Parking System © 2025</p>
+            </div>
+        </div>
+
+        <script>
+            // WebSocket connection for real-time updates
+            let ws;
+            const wsStatus = document.getElementById("ws-status");
+
+            function connectWebSocket() {
+                const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+                ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
+
+                ws.onopen = () => {
+                    console.log("WebSocket connected");
+                    wsStatus.classList.add("connected");
+                };
+
+                ws.onclose = () => {
+                    console.log("WebSocket disconnected");
+                    wsStatus.classList.remove("connected");
+                    setTimeout(connectWebSocket, 3000);
+                };
+
+                ws.onmessage = (event) => {
+                    const data = JSON.parse(event.data);
+                    console.log("WebSocket message:", data);
+
+                    if (data.type === "slot_update") {
+                        updateSlot(data.slot, data.occupied);
+                    }
+                };
+            }
+
+            function updateSlot(slotNumber, isOccupied) {
+                const slotElement = document.querySelector(`[data-slot="${slotNumber}"]`);
+                if (slotElement) {
+                    slotElement.classList.remove("free", "occupied");
+                    slotElement.classList.add(isOccupied ? "occupied" : "free");
+
+                    const statusText = slotElement.querySelector(".status");
+                    if (statusText) {
+                        statusText.textContent = isOccupied ? "Occupied" : "Free";
+                    }
+
+                    updateStats();
+                }
+            }
+
+            function updateStats() {
+                const total = 8;
+                const occupied = document.querySelectorAll(".slot.occupied").length;
+                const free = total - occupied;
+
+                document.getElementById("total-slots").textContent = total;
+                document.getElementById("free-slots").textContent = free;
+                document.getElementById("occupied-slots").textContent = occupied;
+            }
+
+            connectWebSocket();
+        </script>
+    </body>
 </html>

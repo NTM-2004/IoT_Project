@@ -66,7 +66,7 @@ def on_publish(client, userdata, mid):
     print(f"[OTA MQTT] Message published (mid: {mid})")
 
 def init_mqtt():
-    """Initialize MQTT client for OTA service"""
+    # Initialize MQTT client for OTA service
     global mqtt_client
     mqtt_client = mqtt.Client(client_id="ota_service")
     mqtt_client.on_connect = on_connect
@@ -87,7 +87,6 @@ def init_mqtt():
         return False
 
 def shutdown_mqtt():
-    """Shutdown MQTT client"""
     global mqtt_client
     if mqtt_client:
         mqtt_client.loop_stop()
@@ -95,7 +94,6 @@ def shutdown_mqtt():
         print("[OTA MQTT] Shutdown complete")
 
 def calculate_md5(file_path):
-    """Calculate MD5 hash of a file"""
     md5_hash = hashlib.md5()
     with open(file_path, "rb") as f:
         # Read file in chunks to handle large files
@@ -103,7 +101,7 @@ def calculate_md5(file_path):
             md5_hash.update(chunk)
     return md5_hash.hexdigest()
 
-# ==================== OTA ROUTES ====================
+# OTA ROUTES
 
 @router.get("/", response_class=HTMLResponse)
 async def ota_dashboard(request: Request, session_id: Optional[str] = Cookie(None)):
@@ -118,7 +116,7 @@ async def ota_dashboard(request: Request, session_id: Optional[str] = Cookie(Non
 
 @router.get("/api/devices")
 async def get_devices(session_id: Optional[str] = Cookie(None)):
-    """Get list of devices - Super Admin Only"""
+    # Get list of devices - Super Admin Only
     if not verify_super_admin(session_id):
         return JSONResponse(status_code=401, content={"success": False, "error": "Unauthorized"})
     
@@ -129,7 +127,7 @@ async def get_devices(session_id: Optional[str] = Cookie(None)):
 
 @router.get("/api/firmware/list")
 async def list_firmware(session_id: Optional[str] = Cookie(None)):
-    """List available firmware files - Super Admin Only"""
+    # List available firmware files - Super Admin Only
     if not verify_super_admin(session_id):
         return JSONResponse(status_code=401, content={"success": False, "error": "Unauthorized"})
     
@@ -156,7 +154,7 @@ async def list_firmware(session_id: Optional[str] = Cookie(None)):
 
 @router.post("/api/firmware/upload")
 async def upload_firmware(file: UploadFile = File(...), session_id: Optional[str] = Cookie(None)):
-    """Upload firmware file - Super Admin Only"""
+    # Upload firmware file - Super Admin Only
     if not verify_super_admin(session_id):
         return JSONResponse(status_code=401, content={"success": False, "error": "Unauthorized"})
     

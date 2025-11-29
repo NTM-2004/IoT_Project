@@ -52,7 +52,7 @@ def log_admin_action(db: Session, session_id: str, action_type: str,
         print(f"[ADMIN LOG] Error logging action: {e}")
         db.rollback()
 
-# ==================== PUBLIC ENDPOINTS ====================
+# PUBLIC ENDPOINTS
 
 @router.get("/", response_class=HTMLResponse)
 async def public_dashboard(request: Request, db: Session = Depends(get_db)):
@@ -93,7 +93,7 @@ async def public_dashboard(request: Request, db: Session = Depends(get_db)):
             status_code=500
         )
 
-# ==================== AUTH ENDPOINTS ====================
+# AUTH ENDPOINTS
 
 @router.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request):
@@ -146,7 +146,7 @@ async def logout(response: Response, session_id: Optional[str] = Cookie(None)):
     response.delete_cookie("session_id")
     return response
 
-# ==================== ADMIN ENDPOINTS (PROTECTED) ====================
+# ADMIN ENDPOINTS (PROTECTED)
 
 @router.get("/admin", response_class=HTMLResponse)
 async def admin_dashboard(
@@ -264,7 +264,7 @@ async def dashboard_redirect():
     """Redirect old dashboard URL to public dashboard"""
     return RedirectResponse(url="/", status_code=301)
 
-# ==================== ADMIN MANAGEMENT ENDPOINTS ====================
+# ADMIN MANAGEMENT ENDPOINTS
 
 @router.post("/api/admin/create-user")
 async def create_admin_user(
